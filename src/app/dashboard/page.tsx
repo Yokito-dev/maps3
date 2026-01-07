@@ -113,7 +113,7 @@ function page() {
                     </div>
 
                     {/* BAGIAN KANAN: Floating Blue Bar (Kapsul Biru) */}
-                    <div className="hidden md:flex items-center bg-[#2FA6DE] rounded-full p-2 pl-2 pr-6 shadow-lg shadow-blue-900/10 gap-6 mt-4 md:mt-0">
+                    <div className="hidden md:flex items-center bg-gradient-to-r from-[#2FA6DE] to-[#225E65] rounded-full p-2 pl-2 pr-6 shadow-lg shadow-blue-900/10 gap-6 mt-4 md:mt-0">
 
                         {/* Search Input (Dalam Kapsul) */}
                         <div className="relative w-[250px]">
