@@ -43,9 +43,9 @@ export const AuthProvider = ({ children }) => {
       setUser(res.data.user);
 
       // Routing berdasarkan role
-      if (res.data.user.role === "staf") {
+      if (res.data.user.role === "inspektor") {
         router.push("/lobby");
-      } else if (res.data.user.role === "superadmin") {
+      } else if (res.data.user.role === "admin") {
         router.push("/dashboard");
       } else {
         router.push("/daftaradmin");
