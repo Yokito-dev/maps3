@@ -2,7 +2,27 @@
 import { useState } from "react";
 import Image from 'next/image'
 import Link from "next/link";
-import { useAuth } from "../context/AuthContext"; 
+import { useAuth } from "../context/AuthContext";
+import bg from '@/app/assets/plnup3/bg.jpg'
+import logo from '@/app/assets/plnup3/logo.png'
+import schgd from '@/app/assets/plnup3/SCHEDULE GD.jpeg'
+import schjtm from '@/app/assets/plnup3/SCHEDULE JTM.jpeg'
+import schghgbmc from '@/app/assets/plnup3/SCHEDULE GH GB MC.jpeg'
+import schdrone from '@/app/assets/plnup3/SCHEDULE DRONE.jpeg'
+import hslinpksigd from '@/app/assets/plnup3/HASIL INSPEKSI GD.jpeg'
+import hslinpksijtm from '@/app/assets/plnup3/HASIL INSPEKSI JTM.jpeg'
+import hslinpksighgbmc from '@/app/assets/plnup3/HASIL INSPEKSI GH GB MC.jpeg'
+import manajemen from '@/app/assets/plnup3/MANAJEMEN TRAFO.jpeg'
+import pmlihraanghgbmc from '@/app/assets/plnup3/PEMELIHARAAN GH GB MC.jpeg'
+import pmlihraangt from '@/app/assets/plnup3/PEMELIHARAAN GT.jpeg'
+import pmlihraanjtm from '@/app/assets/plnup3/PEMELIHARAAN JTM.jpeg'
+import net from '@/app/assets/plnup3/NET MONITOR.jpeg'
+import tebang from '@/app/assets/plnup3/PENEBANGAN POHON.jpeg'
+import jangkut from '@/app/assets/plnup3/JASA ANGKUT 1.jpg'
+import terimabbm from '@/app/assets/plnup3/PENERIMAAN BBM.jpeg'
+import kirimbbm from '@/app/assets/plnup3/PENGIRIMAN BBM (TRANSPORTIR).jpeg'
+
+
 // Pastikan path "../context/AuthContext" ini benar sesuai struktur folder Anda
 // Jika error "Module not found", cek lokasi file AuthContext.tsx Anda.
 
@@ -13,7 +33,7 @@ import Swal from "sweetalert2";
 
 function page() {
     // Jika useAuth atau user belum siap, kita beri nilai default agar tidak error saat render
-    const { user, logout } = useAuth() || { user: null, logout: () => {} }; 
+    const { user, logout } = useAuth() || { user: null, logout: () => { } };
     const router = useRouter();
     const [searchTerm, setSearchTerm] = useState<string>('');
 
@@ -37,66 +57,70 @@ function page() {
 
     // Data Menu Grid
     const dashboardMenus = [
-        { id: 1, title: "Schedule GD", link: "/schedule-gd" },
-        { id: 2, title: "Schedule JTM", link: "/schedule-jtm" },
-        { id: 3, title: "Schedule GH GB MC", link: "/schedule-gh-gb-mc" },
-        { id: 4, title: "Schedule Drone", link: "/schedule-drone" },
-        { id: 5, title: "Daftar Tamu", link: "/daftaradmin" },
-        { id: 6, title: "Laporan Statistik", link: "/statistik" },
-        { id: 7, title: "Akses Pengguna", link: "/aksespengguna" },
-        { id: 8, title: "Keluar", action: handleLogoutClick },
+        { id: 1, title: "Schedule GD", link: "/schedule-gd", image: schgd },
+        { id: 2, title: "Schedule JTM", link: "/schedule-jtm", image: schjtm },
+        { id: 3, title: "Schedule GH GB MC", link: "/schedule-gh-gb-mc", image: schghgbmc },
+        { id: 4, title: "Schedule Drone", link: "/schedule-drone", image: schdrone },
+        { id: 5, title: "Hasil Inspeksi GD", link: "/hasil-inspeksi-gd", image: hslinpksigd },
+        { id: 6, title: "Hasil Inspeksi JTM", link: "/hasil-inspeksi-jtm", image: hslinpksijtm },
+        { id: 7, title: "Hasil Inspeksi GH GB MC", link: "/hasil-inspeksi-gh-gb-mc", image: hslinpksighgbmc },
+        { id: 8, title: "Manajemen Trafo", link: "/manajemen-trafo", image: manajemen },
+        { id: 9, title: "Pemeliharaan GH GB MC", link: "/pemeliharaan-gh-gb-mc", image: pmlihraanghgbmc },
+        { id: 10, title: "Pemeliharaan GT", link: "/pemeliharaan-gt", image: pmlihraangt },
+        { id: 11, title: "Pemeliharaan JTM", link: "/pemeliharaan-jtm", image: pmlihraanjtm },
+        { id: 12, title: "Net Monitor", link: "/net-monitor", image: net },
+        { id: 13, title: "Penebangan Pohon", link: "/penebangan-pohon", image: tebang },
+        { id: 14, title: "Jasa Angkut", link: "/jasa-angkut", image: jangkut },
+        { id: 15, title: "Penerimaan BBM", link: "/penerimaan-bbm", image: terimabbm },
+        { id: 16, title: "Pengiriman BBM (Transportir)", link: "/pengiriman-bbm", image: kirimbbm },
     ];
 
-    const filteredMenus = dashboardMenus.filter(item => 
+    const filteredMenus = dashboardMenus.filter(item =>
         item.title.toLowerCase().includes(searchTerm.toLowerCase())
     );
 
     return (
         <div className="min-h-screen bg-white font-sans">
-            
             {/* --- CUSTOM NAVBAR (HEADER) --- */}
             {/* Height disesuaikan agar proporsional */}
             <header className="relative w-full h-[140px] md:h-[160px]">
-                
+
                 {/* 1. BACKGROUND (SEMENTARA WARNA GRADASI AGAR TIDAK ERROR GAMBAR) */}
                 <div className="absolute inset-0 z-0 bg-gradient-to-r from-blue-300 to-cyan-200">
                     {/* Nanti jika sudah ada gambar, hapus className bg-gradient... dan uncomment kode Image di bawah ini: */}
-                    
-                    {/* <Image 
-                        src="/path/ke/gambar-background-anda.png" 
-                        alt="Header Background" 
-                        fill 
-                        className="object-cover object-left-top"
-                        priority
-                    /> 
-                    */}
+
+                    {/* 1. BACKGROUND IMAGE */}
+                    <div className="absolute inset-0 z-0">
+                        <Image
+                            src={bg}
+                            alt="Header Background"
+                            fill
+                            className="object-cover object-left-top"
+                            priority
+                        />
+                    </div>
                 </div>
 
                 {/* 2. KONTEN NAVBAR (OVERLAY) */}
                 <div className="relative z-10 flex items-center justify-between h-full px-6 md:px-12 w-full">
-                    
+
                     {/* BAGIAN KIRI: Hamburger & Logo */}
                     <div className="flex items-center gap-4 md:gap-6 mt-4 md:mt-0">
                         <button className="text-slate-800 text-3xl md:text-4xl hover:opacity-70 transition">
                             <IoMdMenu />
                         </button>
-                        
-                        {/* Placeholder Logo (Ganti dengan Image nanti) */}
-                        <div className="flex flex-col">
-                            <h1 className="text-2xl font-bold text-slate-800 tracking-tighter">PLN</h1>
-                            <p className="text-xs font-semibold text-slate-700">PINISI UP3 MS</p>
-                        </div>
+                        <Image src={logo} alt="PLN Logo" width={140} height={60} className="object-contain" />
                     </div>
 
                     {/* BAGIAN KANAN: Floating Blue Bar (Kapsul Biru) */}
                     <div className="hidden md:flex items-center bg-[#2FA6DE] rounded-full p-2 pl-2 pr-6 shadow-lg shadow-blue-900/10 gap-6 mt-4 md:mt-0">
-                        
+
                         {/* Search Input (Dalam Kapsul) */}
                         <div className="relative w-[250px]">
                             <IoMdSearch className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 text-xl" />
-                            <input 
-                                type="text" 
-                                placeholder="Search" 
+                            <input
+                                type="text"
+                                placeholder="Search"
                                 className="w-full pl-12 pr-4 py-2.5 rounded-full border-none focus:ring-0 outline-none text-gray-600 bg-white placeholder:text-gray-400"
                                 onChange={(e) => setSearchTerm(e.target.value)}
                             />
@@ -110,7 +134,7 @@ function page() {
 
                         {/* Profile Icon */}
                         <div className="cursor-pointer text-white hover:text-blue-100 transition">
-                             <FaUserCircle className="text-3xl" />
+                            <FaUserCircle className="text-3xl" />
                         </div>
                     </div>
 
@@ -123,13 +147,15 @@ function page() {
             </header>
 
             {/* --- MAIN CONTENT (GRID MENU) --- */}
-            <main className="max-w-7xl mx-auto px-6 py-10">
+            <main
+                className="max-w-7xl mx-auto px-6 py-10 bg-white rounded-t-3xl -mt-10 relative z-20 shadow-xl"
+            >
                 {/* Mobile Search Bar */}
                 <div className="mb-6 md:hidden relative">
                     <IoMdSearch className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400" />
-                    <input 
-                        type="text" 
-                        placeholder="Search menu..." 
+                    <input
+                        type="text"
+                        placeholder="Search menu..."
                         className="w-full pl-10 pr-4 py-2 rounded-full border border-gray-300"
                         onChange={(e) => setSearchTerm(e.target.value)}
                     />
@@ -137,10 +163,8 @@ function page() {
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-8">
                     {filteredMenus.map((item) => (
-                        <div 
+                        <div
                             key={item.id}
-                            onClick={item.action ? item.action : undefined}
-                            className="bg-white rounded-2xl shadow-[0_4px_15px_rgba(0,0,0,0.05)] hover:shadow-[0_8px_25px_rgba(47,166,222,0.2)] transition-all duration-300 overflow-hidden border border-gray-100 cursor-pointer flex flex-col group h-64"
                         >
                             {/* Logic Link: Jika ada link pakai Link, jika tidak (seperti Logout) pakai div biasa */}
                             {item.link ? (
@@ -163,23 +187,47 @@ function page() {
 // Komponen Isi Kartu (Dipisah agar rapi)
 function CardContent({ item }: { item: any }) {
     return (
-        <>
-            <div className="flex-1 flex items-center justify-center bg-[#F8FDFF] group-hover:bg-white transition-colors relative p-6">
-                {/* LOGIKA ICON:
-                   Karena kita belum import gambar icon, kita pakai placeholder lingkaran biru dulu.
-                   Nanti Anda bisa ubah ini menjadi <Image src={item.icon} ... /> 
-                */}
-                <div className="w-24 h-24 bg-blue-50 rounded-full flex items-center justify-center text-blue-400 text-xs text-center p-2 border-2 border-blue-100">
-                    Icon<br/>{item.title}
-                </div>
+        <div
+            className="
+                group
+                flex flex-col items-center justify-center
+                bg-gradient-to-r from-[#2FA6DE] to-[#225E65]
+                text-white
+                p-6
+                rounded-2xl
+                transition-all duration-300 ease-out
+                hover:scale-[1.05]
+            "
+        >
+            {/* IMAGE */}
+            <div
+                className="
+                    w-40 h-40
+                    rounded-md
+                    overflow-hidden
+                    mb-4
+                "
+            >
+                <Image
+                    src={item.image}
+                    alt={item.title}
+                    className="
+                        w-full h-full object-cover
+                        transition-transform duration-300 ease-out
+                        group-hover:scale-110
+                    "
+                />
             </div>
-            
-            {/* Footer Biru */}
-            <div className="bg-[#2FA6DE] text-white py-3 px-4 text-center font-semibold tracking-wide text-sm md:text-base group-hover:bg-[#258bbd] transition-colors">
+
+            {/* TITLE */}
+            <h3 className="text-sm md:text-base font-semibold text-center tracking-wide">
                 {item.title}
-            </div>
-        </>
-    );
+            </h3>
+        </div>
+    )
 }
+
+
+
 
 export default page;
