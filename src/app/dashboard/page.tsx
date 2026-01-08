@@ -3,6 +3,7 @@ import { useState } from "react";
 import Image from 'next/image'
 import Link from "next/link";
 import { useAuth } from "../context/AuthContext";
+
 import bg from '@/app/assets/plnup3/bg.jpg'
 import logo from '@/app/assets/plnup3/logo.png'
 import schgd from '@/app/assets/plnup3/SCHEDULE GD.jpeg'
@@ -27,8 +28,7 @@ import kirimbbm from '@/app/assets/plnup3/PENGIRIMAN BBM (TRANSPORTIR).jpeg'
 // Jika error "Module not found", cek lokasi file AuthContext.tsx Anda.
 
 import { useRouter } from "next/navigation";
-import { IoMdSearch, IoMdMenu } from "react-icons/io";
-import { FaUserCircle } from "react-icons/fa";
+import { IoMdMenu, IoMdSearch } from "react-icons/io";
 import Swal from "sweetalert2";
 
 function page() {
@@ -36,6 +36,8 @@ function page() {
     const { user, logout } = useAuth() || { user: null, logout: () => { } };
     const router = useRouter();
     const [searchTerm, setSearchTerm] = useState<string>('');
+    const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+
 
     const handleLogoutClick = () => {
         Swal.fire({
@@ -80,7 +82,7 @@ function page() {
     );
 
     return (
-        <div className="min-h-screen bg-white font-sans">
+        <div className="min-h-screen bg-white font-sans ">
             {/* --- CUSTOM NAVBAR (HEADER) --- */}
             {/* Height disesuaikan agar proporsional */}
             <header className="relative w-full h-[140px] md:h-[160px]">
@@ -106,9 +108,13 @@ function page() {
 
                     {/* BAGIAN KIRI: Hamburger & Logo */}
                     <div className="flex items-center gap-4 md:gap-6 mt-4 md:mt-0">
-                        <button className="text-slate-800 text-3xl md:text-4xl hover:opacity-70 transition">
+                        <button
+                            onClick={() => setIsSidebarOpen(true)}
+                            className="text-slate-800 text-3xl md:text-4xl hover:opacity-70 transition"
+                        >
                             <IoMdMenu />
                         </button>
+
                         <Image src={logo} alt="PLN Logo" width={140} height={60} className="object-contain" />
                     </div>
 
@@ -132,19 +138,83 @@ function page() {
                             <Link href="#" className="hover:text-blue-100 transition">Peta Pohon</Link>
                         </div>
 
-                        {/* Profile Icon */}
-                        <div className="cursor-pointer text-white hover:text-blue-100 transition">
-                            <FaUserCircle className="text-3xl" />
-                        </div>
-                    </div>
-
-                    {/* Mobile Only Search Icon */}
-                    <div className="md:hidden bg-white p-2 rounded-full shadow-md cursor-pointer">
-                        <IoMdSearch className="text-[#2FA6DE] text-2xl" />
                     </div>
 
                 </div>
             </header>
+
+            {/* --- SIDEBAR --- */}
+            <div
+                className={`
+                fixed top-0 left-0 h-full w-72
+                bg-white shadow-2xl rounded-tr-3xl rounded-br-3xl
+                z-50
+                transform transition-transform duration-300
+                ${isSidebarOpen ? "translate-x-0" : "-translate-x-full"}
+                `}
+            >
+                {/* Header Sidebar */}
+                <div className="flex items-center justify-between px-6 py-4 border-b">
+                    <Image
+                        src={logo}
+                        alt="PLN Logo"
+                        width={140}
+                        height={70}
+                        className="object-contain"
+                    />
+                    <button
+                        onClick={() => setIsSidebarOpen(false)}
+                        className="text-2xl text-gray-600 hover:text-red-500"
+                    >
+                        ✕
+                    </button>
+                </div>
+
+                {/* Menu Sidebar */}
+                <nav className="p-6 space-y-4">
+                    <Link href="/aset-gardu" className="block text-gray-700 hover:text-blue-600" >
+                        Aset Gardu
+                    </Link>
+                    <Link href="/aset-gh-gb-mc" className="block text-gray-700 hover:text-blue-600">
+                        Aset GH GB MC
+                    </Link>
+                    <Link href="/aset-jtm" className="block text-gray-700 hover:text-blue-600">
+                        Aset JTM
+                    </Link>
+                    <Link href="/file-gd" className="block text-gray-700 hover:text-blue-600">
+                        File GD
+                    </Link>
+                    <Link href="/file-jtm" className="block text-gray-700 hover:text-blue-600">
+                        File JTM
+                    </Link>
+                    <Link href="/input-to-tebang" className="block text-gray-700 hover:text-blue-600">
+                        Input TO Tebang
+                    </Link>
+                    <Link href="/status-jurusan-gardu" className="block text-gray-700 hover:text-blue-600">
+                        Status Jurusan Gardu
+                    </Link>
+                    <Link href="/usulan-keypoint" className="block text-gray-700 hover:text-blue-600">
+                        Usulan Keypoint
+                    </Link>
+
+                    <hr className="my-4 border-gray-400" />
+
+                    <button
+                        onClick={handleLogoutClick}
+                        className="w-full text-left text-red-600 hover:text-red-700"
+                    >
+                        Logout
+                    </button>
+                </nav>
+            </div>
+
+            {isSidebarOpen && (
+                <div
+                    onClick={() => setIsSidebarOpen(false)}
+                    className="fixed inset-0 bg-black/40 z-40"
+                />
+            )}
+
 
             {/* --- MAIN CONTENT (GRID MENU) --- */}
             <main
