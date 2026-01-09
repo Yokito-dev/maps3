@@ -93,15 +93,13 @@ function Page() {
           alt="Background"
           layout="fill"
           objectFit="cover"
-          className="opacity-70 blur-md"
-        />
+          className="opacity-70 blur-md"/>
       </div>
 
       <div className="relative bg-white border border-gray-300 rounded-lg p-6 shadow-lg w-full max-w-3xl backdrop-blur-md">
         <button
           onClick={() => router.back()}
-          className="absolute top-2 right-2 text-red-500 hover:text-red-700 text-lg font-bold"
-        >
+          className="absolute top-2 right-2 text-red-500 hover:text-red-700 text-lg font-bold">
           ❌
         </button>
 
@@ -118,16 +116,14 @@ function Page() {
                 <input
                   type="checkbox"
                   checked={selectAll}
-                  onChange={toggleSelectAll}
-                />
+                  onChange={toggleSelectAll}/>
                 <span className="text-sm text-gray-600">Pilih Semua</span>
               </label>
 
               {selectedIds.length > 0 && (
                 <button
                   onClick={markSelectedAsRead}
-                  className="bg-red-500 text-white px-3 py-1 rounded hover:bg-red-600 text-sm"
-                >
+                  className="bg-red-500 text-white px-3 py-1 rounded hover:bg-red-600 text-sm">
                   Tandai Semua Dibaca
                 </button>
               )}
@@ -137,20 +133,17 @@ function Page() {
               {notifications.map((notif) => (
                 <div
                   key={notif.id}
-                  className="flex justify-between items-center bg-gray-100 p-3 rounded-md"
-                >
+                  className="flex justify-between items-center bg-gray-100 p-3 rounded-md">
                   <label className="flex items-center space-x-2">
                     <input
                       type="checkbox"
                       checked={selectedIds.includes(notif.id)}
-                      onChange={() => toggleSelectOne(notif.id)}
-                    />
+                      onChange={() => toggleSelectOne(notif.id)}/>
                     <span className="text-gray-700 text-sm">{notif.message}</span>
                   </label>
                   <button
                     onClick={() => markAsRead(notif.id)}
-                    className="text-red-500 hover:text-red-700 text-xs font-bold"
-                  >
+                    className="text-red-500 hover:text-red-700 text-xs font-bold">
                     Tandai Dibaca
                   </button>
                 </div>
