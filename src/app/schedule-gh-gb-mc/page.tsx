@@ -1,11 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { ChevronLeft, ChevronRight, Plus, Calendar, Clock, MapPin, User } from 'lucide-react';
-import plnkecil from '@/app/assets/plnup3/plnkecil.svg'
-import Image from 'next/image';
-import { useRouter } from "next/navigation";
-import { IoArrowBack } from "react-icons/io5";
+import { ChevronLeft, ChevronRight, Plus, Calendar, Clock, MapPin } from 'lucide-react';
 
 interface Event {
   id: number;
@@ -86,8 +82,6 @@ const SchedulePage = () => {
     'July', 'August', 'September', 'October', 'November', 'December'
   ];
 
-  const router = useRouter();
-
   const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
   const dayNamesShort = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
   const daysOfWeek = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
@@ -101,15 +95,15 @@ const SchedulePage = () => {
     const startingDayOfWeek = firstDay.getDay();
 
     const days = [];
-
+    
     for (let i = 0; i < startingDayOfWeek; i++) {
       days.push(null);
     }
-
+    
     for (let day = 1; day <= daysInMonth; day++) {
       days.push(new Date(year, month, day));
     }
-
+    
     return days;
   };
 
@@ -117,15 +111,15 @@ const SchedulePage = () => {
     if (!date) return false;
     const today = new Date();
     return date.getDate() === today.getDate() &&
-      date.getMonth() === today.getMonth() &&
-      date.getFullYear() === today.getFullYear();
+           date.getMonth() === today.getMonth() &&
+           date.getFullYear() === today.getFullYear();
   };
 
   const isSameDay = (date1: Date | null, date2: Date | null) => {
     if (!date1 || !date2) return false;
     return date1.getDate() === date2.getDate() &&
-      date1.getMonth() === date2.getMonth() &&
-      date1.getFullYear() === date2.getFullYear();
+           date1.getMonth() === date2.getMonth() &&
+           date1.getFullYear() === date2.getFullYear();
   };
 
   const getEventsForDate = (date: Date | null) => {
@@ -139,7 +133,7 @@ const SchedulePage = () => {
     const diff = date.getDate() - day;
     const sunday = new Date(date);
     sunday.setDate(diff);
-
+    
     const weekDates = [];
     for (let i = 0; i < 7; i++) {
       const d = new Date(sunday);
@@ -198,14 +192,14 @@ const SchedulePage = () => {
   const getEventPosition = (startTime: string, endTime: string) => {
     const [startHour, startMin] = startTime.split(':').map(Number);
     const [endHour, endMin] = endTime.split(':').map(Number);
-
+    
     const startMinutes = startHour * 60 + startMin;
     const endMinutes = endHour * 60 + endMin;
     const duration = endMinutes - startMinutes;
-
+    
     const top = (startMinutes / 60) * 64; // 64px per hour
     const height = (duration / 60) * 64;
-
+    
     return { top, height };
   };
 
@@ -222,7 +216,7 @@ const SchedulePage = () => {
       const weekDates = getWeekDates(currentDate);
       const startDate = weekDates[0];
       const endDate = weekDates[6];
-
+      
       if (startDate.getMonth() === endDate.getMonth()) {
         return `${monthNames[startDate.getMonth()]} ${String(startDate.getDate()).padStart(2, '0')} – ${String(endDate.getDate()).padStart(2, '0')}`;
       } else {
@@ -241,29 +235,21 @@ const SchedulePage = () => {
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
-      <div className="sticky top-0 z-30 px-4 pt-4">
-        <div className="max-w-[1600px] mx-auto">
-          <div className="bg-white rounded-full shadow-lg px-6 py-3 flex items-center gap-4">
-
-            {/* BACK BUTTON */}
+      <div className="bg-white shadow-sm border-b border-gray-200 sticky top-0 z-10">
+        <div className="max-w-[1600px] mx-auto px-6 py-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-teal-50 rounded-lg">
+                <Calendar className="text-teal-500" size={22} />
+              </div>
+              <h1 className="text-xl font-semibold text-gray-800">SCHEDULE GH GM MC</h1>
+            </div>
             <button
-              onClick={() => router.push("/menu")}
-              className="w-11 h-11 rounded-full hover:bg-gray-200 flex items-center justify-center transition active:scale-95">
-              <IoArrowBack size={24} className="text-gray-700" />
+              onClick={goToToday}
+              className="px-5 py-2 bg-teal-500 text-white rounded-lg hover:bg-teal-600 transition-all font-semibold text-sm shadow-sm"
+            >
+              TODAY
             </button>
-
-            {/* LOGO PLN (PALING KIRI) */}
-            <Image
-              src={plnkecil}
-              alt="PLN"
-              width={40}
-              height={40}
-              className="object-contain" />
-            {/* TITLE */}
-            <h1 className="text-lg md:text-xl font-medium text-gray-800">
-              Schedule GH GB MC
-            </h1>
-
           </div>
         </div>
       </div>
@@ -278,28 +264,31 @@ const SchedulePage = () => {
                   setView('day');
                   setSelectedDate(currentDate);
                 }}
-                className={`px-5 py-2 rounded-md text-sm font-semibold transition-all ${view === 'day'
-                  ? 'bg-white text-teal-600 shadow-sm'
-                  : 'text-gray-600 hover:text-gray-900'
-                  }`}
+                className={`px-5 py-2 rounded-md text-sm font-semibold transition-all ${
+                  view === 'day'
+                    ? 'bg-white text-teal-600 shadow-sm'
+                    : 'text-gray-600 hover:text-gray-900'
+                }`}
               >
                 Day
               </button>
               <button
                 onClick={() => setView('week')}
-                className={`px-5 py-2 rounded-md text-sm font-semibold transition-all ${view === 'week'
-                  ? 'bg-white text-teal-600 shadow-sm'
-                  : 'text-gray-600 hover:text-gray-900'
-                  }`}
+                className={`px-5 py-2 rounded-md text-sm font-semibold transition-all ${
+                  view === 'week'
+                    ? 'bg-white text-teal-600 shadow-sm'
+                    : 'text-gray-600 hover:text-gray-900'
+                }`}
               >
                 Week
               </button>
               <button
                 onClick={() => setView('month')}
-                className={`px-5 py-2 rounded-md text-sm font-semibold transition-all ${view === 'month'
-                  ? 'bg-white text-teal-600 shadow-sm'
-                  : 'text-gray-600 hover:text-gray-900'
-                  }`}
+                className={`px-5 py-2 rounded-md text-sm font-semibold transition-all ${
+                  view === 'month'
+                    ? 'bg-white text-teal-600 shadow-sm'
+                    : 'text-gray-600 hover:text-gray-900'
+                }`}
               >
                 Month
               </button>
@@ -350,17 +339,19 @@ const SchedulePage = () => {
                   <div
                     key={idx}
                     onClick={() => day && handleDateClick(day)}
-                    className={`min-h-28 border-b border-r border-gray-100 p-2 ${!day ? 'bg-gray-50/50' : 'bg-white hover:bg-gray-50/50'
-                      } transition-colors cursor-pointer`}
+                    className={`min-h-28 border-b border-r border-gray-100 p-2 ${
+                      !day ? 'bg-gray-50/50' : 'bg-white hover:bg-gray-50/50'
+                    } transition-colors cursor-pointer`}
                   >
                     {day && (
                       <>
                         <div className="flex justify-start mb-2">
                           <span
-                            className={`text-sm font-semibold ${isTodayDate
-                              ? 'bg-teal-500 text-white w-7 h-7 rounded-full flex items-center justify-center'
-                              : 'text-gray-700'
-                              }`}
+                            className={`text-sm font-semibold ${
+                              isTodayDate
+                                ? 'bg-teal-500 text-white w-7 h-7 rounded-full flex items-center justify-center'
+                                : 'text-gray-700'
+                            }`}
                           >
                             {day.getDate()}
                           </span>
@@ -398,7 +389,7 @@ const SchedulePage = () => {
                 {dayNamesShort[(selectedDate || currentDate).getDay()]}
               </div>
             </div>
-
+            
             <div className="overflow-y-auto" style={{ maxHeight: 'calc(100vh - 280px)' }}>
               <div className="relative">
                 {timeSlots.map((slot, idx) => (
@@ -409,7 +400,7 @@ const SchedulePage = () => {
                     <div className="flex-1 relative h-16 border-b border-gray-200"></div>
                   </div>
                 ))}
-
+                
                 {/* Render events */}
                 <div className="absolute top-0 left-20 right-0 bottom-0 pointer-events-none">
                   {getEventsForDate(selectedDate || currentDate).map(event => {
@@ -451,20 +442,21 @@ const SchedulePage = () => {
           <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
             {/* Week Header */}
             <div className="grid grid-cols-8 border-b border-gray-200 bg-gray-50">
-              <div className="w-20"></div>
+              <div className="w-20 border-r border-gray-200"></div>
               {weekDates.map((date, idx) => (
                 <div
                   key={idx}
-                  className="text-center py-3 border-l border-gray-200"
+                  className="text-center py-3 border-r border-gray-200 last:border-r-0"
                 >
                   <div className="text-xs font-bold text-gray-500 uppercase tracking-wide mb-1">
                     {dayNamesShort[date.getDay()]}
                   </div>
                   <div
-                    className={`text-sm font-bold mx-auto ${isToday(date)
-                      ? 'bg-teal-500 text-white w-7 h-7 rounded-full flex items-center justify-center'
-                      : 'text-gray-700'
-                      }`}
+                    className={`text-sm font-bold mx-auto ${
+                      isToday(date)
+                        ? 'bg-teal-500 text-white w-7 h-7 rounded-full flex items-center justify-center'
+                        : 'text-gray-700'
+                    }`}
                   >
                     {date.getDate()}
                   </div>
@@ -476,14 +468,14 @@ const SchedulePage = () => {
             <div className="overflow-y-auto" style={{ maxHeight: 'calc(100vh - 280px)' }}>
               <div className="relative">
                 {timeSlots.map((slot, idx) => (
-                  <div key={idx} className="flex border-b border-gray-100">
-                    <div className="w-20 py-4 px-4 text-xs font-medium text-gray-500 text-right flex-shrink-0 bg-gray-50/50">
+                  <div key={idx} className="flex">
+                    <div className="w-20 py-4 px-4 text-xs font-medium text-gray-500 text-right flex-shrink-0 bg-gray-50/50 border-r border-b border-gray-200">
                       {slot.display}
                     </div>
                     {weekDates.map((date, dateIdx) => (
                       <div
                         key={dateIdx}
-                        className="flex-1 relative h-16 border-l border-gray-200 hover:bg-gray-50/50 transition-colors"
+                        className="flex-1 relative h-16 border-r border-b border-gray-200 last:border-r-0 hover:bg-gray-50/50 transition-colors"
                       ></div>
                     ))}
                   </div>
@@ -492,13 +484,14 @@ const SchedulePage = () => {
                 {/* Render week events */}
                 {weekDates.map((date, dateIdx) => {
                   const dayEvents = getEventsForDate(date);
+                  const columnWidth = `calc((100% - 5rem) / 7)`;
                   return (
                     <div
                       key={dateIdx}
                       className="absolute top-0 bottom-0 pointer-events-none"
                       style={{
-                        left: `calc(5rem + ${dateIdx * (100 / 7)}%)`,
-                        width: `calc(${100 / 7}% - 4px)`
+                        left: `calc(5rem + ${dateIdx} * ${columnWidth})`,
+                        width: columnWidth
                       }}
                     >
                       {dayEvents.map(event => {
@@ -536,11 +529,12 @@ const SchedulePage = () => {
 
       {/* Floating Add Button */}
       <button
-        className="fixed bottom-8 right-8 w-14 h-14 bg-teal-500 text-white rounded-full shadow-lg hover:bg-teal-600 hover:shadow-xl transition-all flex items-center justify-center z-50">
+        className="fixed bottom-8 right-8 w-14 h-14 bg-teal-500 text-white rounded-full shadow-lg hover:bg-teal-600 hover:shadow-xl transition-all flex items-center justify-center z-50"
+      >
         <Plus size={26} strokeWidth={2.5} />
       </button>
     </div>
   );
 };
 
-export default SchedulePage; 3
+export default SchedulePage;
