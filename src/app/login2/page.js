@@ -3,9 +3,9 @@ import React, { useEffect } from "react";
 import { useAuth } from "../context/AuthContext";
 import Image from "next/image";
 
-import bgPINISIpln from "../assets/svgs/BGLogin.svg";
-import PinisiPLNLogo from "../assets/svgs/pinisiplnlogo.svg";
-import PinisiPLNLogoPutih from "../assets/svgs/LOGOPLNPUTIH.svg";
+import bgPINISIpln from "../assets/plnup3/BGLogin.svg";
+import PinisiPLNLogo from "../assets/plnup3/pinisiplnlogo.svg";
+import PinisiPLNLogoPutih from "../assets/plnup3/LOGOPLNPUTIH.svg";
 
 export default function Page() {
   const { login } = useAuth();

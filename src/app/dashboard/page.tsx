@@ -4,9 +4,10 @@ import Image from 'next/image'
 import Link from "next/link";
 import { useAuth } from "../context/AuthContext";
 import { useRouter } from "next/navigation";
+import { usePathname } from "next/navigation";
 
 import bg from '@/app/assets/plnup3/bg.jpg'
-import logo from '@/app/assets/plnup3/logo.png'
+import logo from '@/app/assets/plnup3/Logoplnpinisigelap.svg'
 import schgd from '@/app/assets/plnup3/SCHEDULE GD.jpeg'
 import schjtm from '@/app/assets/plnup3/SCHEDULE JTM.jpeg'
 import schghgbmc from '@/app/assets/plnup3/SCHEDULE GH GB MC.jpeg'
@@ -16,6 +17,7 @@ import hslinpksighgbmc from '@/app/assets/plnup3/HASIL INSPEKSI GH GB MC.jpeg'
 import pmlihraanghgbmc from '@/app/assets/plnup3/PEMELIHARAAN GH GB MC.jpeg'
 import pmlihraangt from '@/app/assets/plnup3/PEMELIHARAAN GT.jpeg'
 import pmlihraanjtm from '@/app/assets/plnup3/PEMELIHARAAN JTM.jpeg'
+import bgMobile from '@/app/assets/plnup3/BGMOBILE.png'
 
 import {
     IoMdMenu,
@@ -27,7 +29,6 @@ import {
     IoIosFolderOpen,
 } from "react-icons/io";
 import { IoLogOutOutline } from "react-icons/io5";
-
 import Swal from "sweetalert2";
 
 export default function Page() {
@@ -36,6 +37,8 @@ export default function Page() {
 
     const [searchTerm, setSearchTerm] = useState('');
     const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+    const pathname = usePathname();
+
 
     const handleLogoutClick = () => {
         Swal.fire({
@@ -72,69 +75,103 @@ export default function Page() {
     );
 
     return (
-        <div className="min-h-screen font-sans">
-            {/* BACKGROUND */}
-            <div className="fixed inset-0 -z-10">
-                <Image src={bg} alt="Background" fill className="object-cover" priority />
+        <div className="h-[100svh] font-poppins relative flex flex-col overflow-hidden">
+            {/* ===== DESKTOP BACKGROUND ===== */}
+            <div className="hidden md:block fixed inset-0 -z-10">
+                <Image
+                    src={bg}
+                    alt="Background Desktop"
+                    fill
+                    priority
+                    sizes="100vw"
+                    className="object-cover" />
+            </div>
+
+            {/* ===== MOBILE BACKGROUND (ANTI GOYANG) ===== */}
+            <div className="md:hidden fixed inset-0 -z-10 pointer-events-none">
+                <div className="absolute inset-0 overflow-hidden">
+                    <div className="absolute inset-[-10%]">
+                        <Image
+                            src={bg}
+                            alt="Background Mobile"
+                            fill
+                            priority
+                            sizes="100vw"
+                            className="object-cover transform-gpu scale-110" />
+                    </div>
+                </div>
             </div>
 
             {/* HEADER */}
-            <header className="relative w-full h-[110px] sm:h-[130px] md:h-[160px]">
+            <header className="relative w-full shrink-0 pt-4 pb-6 md:pb-8 mt-2">
                 <div className="relative z-10 flex items-center justify-between h-full px-4 sm:px-6 md:px-12">
 
-                    {/* LEFT */}
-                    <div className="flex items-center gap-3 md:gap-6">
-                        <button
-                            onClick={() => setIsSidebarOpen(true)}
-                            className="text-slate-800 text-3xl md:text-4xl"
-                        >
+                    <div className="flex items-center gap-4">
+                        <button onClick={() => setIsSidebarOpen(true)} className="text-3xl">
                             <IoMdMenu />
                         </button>
                         <Image src={logo} alt="PLN Logo" width={120} height={60} />
                     </div>
 
-                    {/* RIGHT MOBILE */}
-                    <div className="flex md:hidden items-center gap-4">
+                    <div className="md:hidden bg-gradient-to-r from-[#2FA6DE] to-[#225E65] rounded-full p-[3px] flex gap-[3px] shadow-lg scale-[0.9] sm:scale-100">
+                        <Link
+                            href="/dashboard"
+                            className={`px-3 py-1 text-[12px] sm:text-sm rounded-full transition ${pathname === "/dashboard"
+                                ? "bg-white/25 text-white shadow"
+                                : "bg-white/10 text-white/80 hover:bg-white/20 hover:text-white"
+                                }`}>
+                            Menu
+                        </Link>
+
                         <Link
                             href="/peta-pohon"
-                            className="text-sm font-medium text-white bg-gradient-to-r from-[#2FA6DE] to-[#225E65] rounded-full p-2 pr-2 gap-6 shadow-lg"
-                        >
+                            className={`px-3 py-1 text-[12px] sm:text-sm rounded-full transition ${pathname === "/peta-pohon"
+                                ? "bg-white/20 text-white shadow-sm"
+                                : "text-white/80 hover:bg-white/20 hover:text-white"
+                                }`}>
                             Peta Pohon
                         </Link>
                     </div>
 
-                    {/* RIGHT DESKTOP */}
                     <div className="hidden md:flex items-center bg-gradient-to-r from-[#2FA6DE] to-[#225E65] rounded-full p-2 pr-6 gap-6 shadow-lg">
                         <div className="relative w-[250px]">
-                            <IoMdSearch className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 text-xl" />
+                            <IoMdSearch className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
                             <input
                                 type="text"
                                 placeholder="Search"
                                 className="w-full pl-12 pr-4 py-2.5 rounded-full outline-none"
-                                onChange={(e) => setSearchTerm(e.target.value)}
-                            />
+                                onChange={(e) => setSearchTerm(e.target.value)} />
                         </div>
-                        <div className="flex gap-6 text-white font-medium">
-                            <Link href="#">Menu</Link>
-                            <Link href="/peta-pohon">Peta Pohon</Link>
+                        <div className="flex gap-3 text-white font-medium">
+                            <Link
+                                href="/dashboard"
+                                className={`px-4 py-1.5 rounded-full transition ${pathname === "/dashboard"
+                                    ? "bg-white/20 text-white shadow-sm"
+                                    : "text-white/80 hover:bg-white/20 hover:text-white"
+                                    }`}>
+                                Menu
+                            </Link>
+
+                            <Link
+                                href="/peta-pohon"
+                                className={`px-4 py-1.5 rounded-full transition ${pathname === "/peta-pohon"
+                                    ? "bg-white/20 text-white shadow-sm"
+                                    : "text-white/80 hover:bg-white/20 hover:text-white"
+                                    }`}>
+                                Peta Pohon
+                            </Link>
                         </div>
+
                     </div>
 
                 </div>
             </header>
 
             {/* SIDEBAR */}
-            <div className={`
-                fixed top-0 left-0 h-full w-64 sm:w-72
-                bg-white shadow-2xl z-50
-                rounded-tr-2xl rounded-br-2xl
-                sm:rounded-tr-3xl sm:rounded-br-3xl
-                transform transition-transform duration-300
-                ${isSidebarOpen ? "translate-x-0" : "-translate-x-full"}
-            `}>
-                <div className="flex items-center justify-between px-6 py-4 border-b">
+            <div className={`fixed top-0 left-0 h-full w-64 bg-white shadow-2xl z-50 transform transition-transform duration-300 ${isSidebarOpen ? "translate-x-0" : "-translate-x-full"}`}>
+                <div className="flex items-center justify-between p-4 border-b">
                     <Image src={logo} alt="Logo" width={120} height={60} />
-                    <button onClick={() => setIsSidebarOpen(false)} className="text-xl">✕</button>
+                    <button onClick={() => setIsSidebarOpen(false)}>✕</button>
                 </div>
 
                 <nav className="p-6 space-y-4">
@@ -145,72 +182,71 @@ export default function Page() {
                     <SidebarLink href="/file-jtm" icon={<IoIosFolderOpen />} label="File JTM" close={setIsSidebarOpen} />
 
                     <hr />
-
-                    <button
-                        onClick={handleLogoutClick}
-                        className="flex items-center gap-2 text-red-600"
-                    >
-                        <IoLogOutOutline />
-                        Logout
+                    <button onClick={handleLogoutClick} className="flex items-center gap-2 text-red-600">
+                        <IoLogOutOutline /> Logout
                     </button>
                 </nav>
             </div>
 
-            {isSidebarOpen && (
-                <div onClick={() => setIsSidebarOpen(false)} className="fixed inset-0 bg-black/40 z-40" />
-            )}
+            {isSidebarOpen && <div onClick={() => setIsSidebarOpen(false)} className="fixed inset-0 bg-black/40 z-40" />}
 
             {/* MAIN */}
-            <main className="max-w-7xl mx-auto px-4 sm:px-6 py-6 sm:py-10 bg-white rounded-2xl sm:rounded-3xl shadow-xl">
-                {/* MOBILE SEARCH */}
-                <div className="mb-6 md:hidden relative">
-                    <IoMdSearch className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
-                    <input
-                        type="text"
-                        placeholder="Search menu..."
-                        className="w-full pl-10 pr-4 py-2 rounded-full border"
-                        onChange={(e) => setSearchTerm(e.target.value)}
-                    />
+            <main className="w-full bg-white rounded-t-3xl mt-4 md:mt-0 lg:-mt-4 shadow-xl flex flex-col flex-1 min-h-0 relative z-10">
+
+                {/* SEARCH MOBILE — FULL WIDTH */}
+                <div className="md:hidden sticky top-0 z-50 bg-white px-4 py-4 rounded-t-3xl">
+                    <div className="relative max-w-none">
+                        <IoMdSearch className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
+                        <input
+                            type="text"
+                            placeholder="Search menu..."
+                            className="w-full pl-10 pr-4 py-2 rounded-full border"
+                            onChange={(e) => setSearchTerm(e.target.value)}/>
+                    </div>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
-                    {filteredMenus.map(item => (
-                        <Link key={item.id} href={item.link}>
-                            <CardContent item={item} />
-                        </Link>
-                    ))}
+                {/* CONTENT WRAPPER */}
+                <div className="max-w-7xl mx-auto px-4 sm:px-6 py-4 sm:py-6 flex flex-col flex-1 min-h-0">
+
+                    {/* GRID / EMPTY */}
+                    <div className="flex-1 overflow-y-auto overscroll-contain pr-1 pb-16 min-h-full">
+                        {filteredMenus.length > 0 ? (
+                            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 sm:gap-6 auto-rows-fr">
+                                {filteredMenus.map(item => (
+                                    <Link key={item.id} href={item.link}>
+                                        <CardContent item={item} />
+                                    </Link>
+                                ))}
+                            </div>
+                        ) : (
+                            <div className="w-full min-h-full flex items-center justify-center">
+                                <p className="text-gray-400 text-lg">Tidak ada menu</p>
+                            </div>
+                        )}
+                    </div>
                 </div>
             </main>
         </div>
     );
 }
 
-/* ===== COMPONENTS ===== */
+/* ==== COMPONENTS ==== */
 
 function SidebarLink({ href, icon, label, close }: any) {
     return (
-        <Link
-            href={href}
-            onClick={() => close(false)}
-            className="flex items-center gap-2 text-gray-700 hover:text-blue-600"
-        >
-            {icon}
-            {label}
+        <Link href={href} onClick={() => close(false)} className="flex items-center gap-2 text-gray-700 hover:text-blue-600">
+            {icon} {label}
         </Link>
     );
 }
 
 function CardContent({ item }: any) {
     return (
-        <div className="group flex flex-col items-center justify-center bg-gradient-to-r from-[#2FA6DE] to-[#225E65] text-white p-5 rounded-2xl transition hover:scale-105">
-            <div className="w-32 h-32 sm:w-36 sm:h-36 md:w-40 md:h-40 overflow-hidden rounded-md mb-4">
-                <Image
-                    src={item.image}
-                    alt={item.title}
-                    className="w-full h-full object-cover transition group-hover:scale-110"
-                />
+        <div className="bg-gradient-to-r from-[#2FA6DE] to-[#225E65] text-white rounded-2xl p-3 sm:p-5 h-full flex flex-col">
+            <div className="w-full aspect-square overflow-hidden rounded-xl mb-3 flex-shrink-0">
+                <Image src={item.image} alt={item.title} className="w-full h-full object-cover" />
             </div>
-            <h3 className="text-base sm:text-lg font-semibold text-center">
+            <h3 className="text-sm sm:text-base font-semibold text-center min-h-[36px] flex items-center justify-center">
                 {item.title}
             </h3>
         </div>
