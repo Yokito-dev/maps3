@@ -213,8 +213,10 @@ export default function Page() {
                         {filteredMenus.length > 0 ? (
                             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 sm:gap-6 md:auto-rows-fr">
                                 {filteredMenus.map(item => (
-                                    <Link key={item.id} href={item.link}>
-                                        <CardContent item={item} />
+                                    <Link key={item.id} href={item.link} className="block h-full">
+                                        <div className="h-full">
+                                            <CardContent item={item} />
+                                        </div>
                                     </Link>
                                 ))}
                             </div>
@@ -234,9 +236,13 @@ export default function Page() {
 
 function SidebarLink({ href, icon, label, close }: any) {
     return (
-        <Link href={href} onClick={() => close(false)} className="flex items-center gap-2 text-gray-700 hover:text-blue-600">
-            {icon} {label}
-        </Link>
+        <div onClick={() => close(false)}>
+            <Link
+                href={href}
+                className="flex items-center gap-2 text-gray-700 hover:text-blue-600">
+                {icon} {label}
+            </Link>
+        </div>
     );
 }
 
@@ -246,7 +252,7 @@ function CardContent({ item }: any) {
             hover:scale-[1.01] hover:shadow-2xl cursor-pointer group">
             <div className="w-full aspect-square md:aspect-auto md:flex-1 overflow-hidden rounded-xl mb-3">
                 <Image src={item.image} alt={item.title}
-                    className="w-full h-full object-cover"/>
+                    className="w-full h-full object-cover" />
             </div>
 
             <h3 className="text-sm sm:text-base font-semibold text-center min-h-[36px] flex items-center justify-center">
