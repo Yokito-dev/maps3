@@ -206,12 +206,13 @@ export default function Page() {
                 </div>
 
                 {/* CONTENT WRAPPER */}
-                <div className="max-w-7xl mx-auto px-4 sm:px-6 py-4 sm:py-6 flex flex-col flex-1 md:min-h-full">
+                <div className="w-full px-4 sm:px-6 py-4 sm:py-6 flex flex-col flex-1 min-h-0">
 
                     {/* GRID / EMPTY */}
-                    <div className="flex-1 overflow-y-auto overscroll-contain pr-1 pb-16 min-h-0 md:min-h-full">
+                    <div className="flex-1 overflow-y-auto overscroll-contain pr-1 pb-16 min-h-full w-full max-w-7xl xl:max-w-none xl:px-12 mx-auto">
+
                         {filteredMenus.length > 0 ? (
-                            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 sm:gap-6 md:auto-rows-fr">
+                            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 sm:gap-6 auto-rows-fr">
                                 {filteredMenus.map(item => (
                                     <Link key={item.id} href={item.link} className="block h-full">
                                         <div className="h-full">
@@ -250,7 +251,7 @@ function CardContent({ item }: any) {
     return (
         <div className=" bg-gradient-to-r from-[#2FA6DE] to-[#225E65] text-white rounded-2xl p-3 sm:p-5 h-full flex flex-col transition-all duration-300 ease-out
             hover:scale-[1.01] hover:shadow-2xl cursor-pointer group">
-            <div className="w-full aspect-square md:aspect-auto md:flex-1 overflow-hidden rounded-xl mb-3">
+            <div className="w-full aspect-square overflow-hidden rounded-xl mb-3 flex-shrink-0">
                 <Image src={item.image} alt={item.title}
                     className="w-full h-full object-cover" />
             </div>
