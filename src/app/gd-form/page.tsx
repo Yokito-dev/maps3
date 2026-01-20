@@ -55,8 +55,8 @@ export default function Page() {
       <div className="fixed inset-0 -z-10 bg-gradient-to-t from-[#165F67]/70 via-[#67C2E9]/30 to-transparent backdrop-blur-sm" />
 
       {/* HEADER */}
-      <header className="fixed top-0 left-0 z-50 w-full pt-5 flex justify-center">
-        <div className="flex items-center gap-3 bg-white px-10 py-3 rounded-3xl shadow-md w-full md:w-[95%]">
+      <header className="fixed top-0 left-0 z-50 w-full pt-3 sm:pt-5 flex justify-center px-3 sm:px-0">
+        <div className="flex items-center gap-3 bg-white px-4 sm:px-10 py-2 sm:py-3 rounded-3xl shadow-md w-full sm:w-[95%]">
           <Link href="/dashboard">
             <FaArrowLeftLong />
           </Link>
@@ -66,52 +66,37 @@ export default function Page() {
       </header>
 
       {/* CONTENT */}
-      <main className="pt-32 px-6 pb-10 max-w-6xl mx-auto">
-        <div className="bg-white rounded-3xl shadow-xl p-8 grid md:grid-cols-2 gap-8">
+      <main className="pt-28 sm:pt-32 px-4 sm:px-6 pb-10 max-w-6xl mx-auto">
+        <div className="bg-white rounded-3xl shadow-xl p-6 sm:p-8 grid md:grid-cols-2 gap-8">
 
           {/* LEFT */}
           <div className="space-y-5">
-
-            <PopupSelect
-              label="Nama Gardu"
-              value={form.namaGardu}
-              options={garduList}
-              onSave={(v: string) => handleChange('namaGardu', v)}
-              onAdd={(v: string) => setGarduList(p => [...p, v])}
+            <PopupSelect label="Nama Gardu" value={form.namaGardu} options={garduList}
+              onSave={(v) => handleChange('namaGardu', v)}
+              onAdd={(v) => setGarduList(p => [...p, v])}
               onClear={() => handleChange('namaGardu', '')}
             />
 
-            <PopupSelect
-              label="UP3"
-              value={form.up3}
-              options={up3List}
-              onSave={(v: string) => handleChange('up3', v)}
-              onAdd={(v: string) => setUp3List(p => [...p, v])}
+            <PopupSelect label="UP3" value={form.up3} options={up3List}
+              onSave={(v) => handleChange('up3', v)}
+              onAdd={(v) => setUp3List(p => [...p, v])}
               onClear={() => handleChange('up3', '')}
             />
 
-            <PopupSelect
-              label="ULP"
-              value={form.ulp}
-              options={ulpList}
-              onSave={(v: string) => handleChange('ulp', v)}
-              onAdd={(v: string) => setUlpList(p => [...p, v])}
+            <PopupSelect label="ULP" value={form.ulp} options={ulpList}
+              onSave={(v) => handleChange('ulp', v)}
+              onAdd={(v) => setUlpList(p => [...p, v])}
               onClear={() => handleChange('ulp', '')}
             />
 
-            <Input
-              label="Schedule Date"
-              type="date"
+            <Input label="Schedule Date" type="date"
               value={form.scheduleDate}
               onChange={(e) => handleChange('scheduleDate', e.target.value)}
             />
 
-            <PopupSelect
-              label="Penyulang"
-              value={form.penyulang}
-              options={penyulangList}
-              onSave={(v: string) => handleChange('penyulang', v)}
-              onAdd={(v: string) => setPenyulangList(p => [...p, v])}
+            <PopupSelect label="Penyulang" value={form.penyulang} options={penyulangList}
+              onSave={(v) => handleChange('penyulang', v)}
+              onAdd={(v) => setPenyulangList(p => [...p, v])}
               onClear={() => handleChange('penyulang', '')}
             />
           </div>
@@ -119,28 +104,22 @@ export default function Page() {
           {/* RIGHT */}
           <div className="space-y-5">
 
+            {/* ZONA PROTEKSI (MUNCUL SETELAH PILIH PENYULANG) */}
             {form.penyulang && (
-              <PopupSelect
-                label="Section"
-                value={form.zona}
-                options={['X', 'Y']}
-                onSave={(v: string) => handleChange('zona', v)}
-                onClear={() => handleChange('zona', '')}
-              />
-            )}
-
-            {form.zona && (
               <div>
                 <label className="text-sm font-semibold">
                   Zona Proteksi <span className="text-red-500">*</span>
                 </label>
 
-                <div className="flex gap-4 mt-3">
+                <div className="flex flex-wrap gap-4 mt-3">
                   {['X', 'Y'].map(z => (
                     <button
                       key={z}
                       type="button"
-                      onClick={() => setSection(z as 'X' | 'Y')}
+                      onClick={() => {
+                        setSection(z as 'X' | 'Y')
+                        setForm(prev => ({ ...prev, zona: z }))
+                      }}
                       className={`px-8 py-3 rounded-full border
                         ${section === z
                           ? 'bg-[#2FA6DE] text-white'
@@ -153,24 +132,31 @@ export default function Page() {
               </div>
             )}
 
-            <Input
-              label="Longlat"
-              value={form.longlat}
+            {/* SECTION (MUNCUL SETELAH ZONA DIPILIH) */}
+            {section && (
+              <PopupSelect
+                label="Section"
+                value={form.zona}
+                options={['X', 'Y']}
+                onSave={(v) => handleChange('zona', v)}
+                onClear={() => {
+                  handleChange('zona', '')
+                  setSection(null)
+                }}
+              />
+            )}
+
+            <Input label="Longlat" value={form.longlat}
               icon={<FaLocationDot />}
               onChange={(e) => handleChange('longlat', e.target.value)}
             />
 
-            <Input
-              label="Kapasitas"
-              value={form.kapasitas}
+            <Input label="Kapasitas" value={form.kapasitas}
               onChange={(e) => handleChange('kapasitas', e.target.value)}
             />
 
-            <PopupSelect
-              label="FASA"
-              value={form.fasa}
-              options={['R', 'S', 'T']}
-              onSave={(v: string) => handleChange('fasa', v)}
+            <PopupSelect label="FASA" value={form.fasa} options={['R', 'S', 'T']}
+              onSave={(v) => handleChange('fasa', v)}
               onClear={() => handleChange('fasa', '')}
             />
 
@@ -180,30 +166,22 @@ export default function Page() {
                 Progress GD <span className="text-red-500">*</span>
               </label>
 
-              <div className="flex gap-4 mt-3 items-center">
+              <div className="flex flex-wrap gap-4 mt-3 items-center">
                 <div className={`w-12 h-12 rounded-full flex items-center justify-center
                   ${progress === 'open' ? 'bg-green-500' :
                     progress === 'close' ? 'bg-red-500' : 'bg-gray-300'}`}>
                   <IoCheckmarkSharp className="text-white text-2xl" />
                 </div>
 
-                <button
-                  onClick={() => setProgress('open')}
+                <button onClick={() => setProgress('open')}
                   className={`px-6 py-3 rounded-full
-                    ${progress === 'open'
-                      ? 'bg-[#2FA6DE] text-white'
-                      : 'border border-[#2FA6DE]'}`}
-                >
+                    ${progress === 'open' ? 'bg-[#2FA6DE] text-white' : 'border border-[#2FA6DE]'}`}>
                   Open Inspeksi
                 </button>
 
-                <button
-                  onClick={() => setProgress('close')}
+                <button onClick={() => setProgress('close')}
                   className={`px-6 py-3 rounded-full
-                    ${progress === 'close'
-                      ? 'bg-[#2FA6DE] text-white'
-                      : 'border border-[#2FA6DE]'}`}
-                >
+                    ${progress === 'close' ? 'bg-[#2FA6DE] text-white' : 'border border-[#2FA6DE]'}`}>
                   Close Inspeksi
                 </button>
               </div>
@@ -211,16 +189,11 @@ export default function Page() {
           </div>
 
           {/* ACTION */}
-          <div className="md:col-span-2 flex justify-end gap-4">
-            <button className="px-10 py-3 rounded-full bg-red-500 text-white">
-              Cancel
-            </button>
-
-            <button
-              disabled={!isFormValid}
+          <div className="md:col-span-2 flex flex-col sm:flex-row justify-end gap-4">
+            <button className="px-10 py-3 rounded-full bg-red-500 text-white">Cancel</button>
+            <button disabled={!isFormValid}
               className={`px-10 py-3 rounded-full text-white
-                ${isFormValid ? 'bg-[#2FA6DE]' : 'bg-gray-400 cursor-not-allowed'}`}
-            >
+                ${isFormValid ? 'bg-[#2FA6DE]' : 'bg-gray-400 cursor-not-allowed'}`}>
               Save
             </button>
           </div>
@@ -240,91 +213,55 @@ interface PopupSelectProps {
   onClear: () => void
 }
 
-function PopupSelect({
-  label,
-  value,
-  options,
-  onSave,
-  onAdd,
-  onClear,
-}: PopupSelectProps) {
-
+function PopupSelect({ label, value, options, onSave, onAdd, onClear }: PopupSelectProps) {
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
   const [temp, setTemp] = useState(value)
 
-  const filtered = options.filter(o =>
-    o.toLowerCase().includes(query.toLowerCase())
-  )
+  const filtered = options.filter(o => o.toLowerCase().includes(query.toLowerCase()))
 
   return (
     <>
       <div>
-        <label className="text-sm font-semibold">
-          {label} <span className="text-red-500">*</span>
-        </label>
-
-        <div
-          onClick={() => { setTemp(value); setQuery(''); setOpen(true) }}
-          className="w-full mt-2 px-5 py-3 rounded-full border-2 border-[#2FA6DE] cursor-pointer"
-        >
-          <span className={value ? '' : 'text-gray-400'}>
-            {value || `Pilih ${label}`}
-          </span>
+        <label className="text-sm font-semibold">{label} <span className="text-red-500">*</span></label>
+        <div onClick={() => { setTemp(value); setQuery(''); setOpen(true) }}
+          className="w-full mt-2 px-5 py-3 rounded-full border-2 border-[#2FA6DE] cursor-pointer">
+          <span className={value ? '' : 'text-gray-400'}>{value || `Pilih ${label}`}</span>
         </div>
       </div>
 
       {open && (
-        <div className="fixed inset-0 z-50 bg-gradient-to-t from-[#165F67]/70 via-[#67C2E9]/30 to-transparent flex items-center justify-center">
-          <div className="bg-white rounded-2xl p-6 w-[420px] shadow-md">
-
+        <div className="fixed inset-0 z-50 bg-gradient-to-t from-[#165F67]/70 via-[#67C2E9]/30 to-transparent flex items-center justify-center px-3">
+          <div className="bg-white rounded-2xl p-6 w-[90%] sm:w-[420px] max-h-[90vh] overflow-y-auto shadow-md">
             <h2 className="font-semibold mb-3">{label}</h2>
 
-            <input
-              value={query}
-              onChange={e => setQuery(e.target.value)}
-              placeholder="Cari / tambah"
-              className="w-full px-4 py-2 border rounded mb-3"
-            />
+            <input value={query} onChange={e => setQuery(e.target.value)}
+              placeholder="Cari / tambah" className="w-full px-4 py-2 border rounded mb-3" />
 
             <div className="max-h-48 overflow-y-auto mb-3">
               {filtered.map(opt => (
-                <div
-                  key={opt}
-                  onClick={() => setTemp(opt)}
+                <div key={opt} onClick={() => setTemp(opt)}
                   className={`px-4 py-2 rounded cursor-pointer
-                    ${temp === opt ? 'bg-[#2FA6DE] text-white' : 'hover:bg-gray-100'}`}
-                >
+                    ${temp === opt ? 'bg-[#2FA6DE] text-white' : 'hover:bg-gray-100'}`}>
                   {opt}
                 </div>
               ))}
             </div>
 
             {query && !options.includes(query) && onAdd && (
-              <button
-                onClick={() => { onAdd(query); setTemp(query) }}
-                className="text-[#2FA6DE] mb-4"
-              >
+              <button onClick={() => { onAdd(query); setTemp(query) }}
+                className="text-[#2FA6DE] mb-4">
                 + Tambah "{query}"
               </button>
             )}
 
             <div className="flex justify-end gap-3">
-              <button
-                onClick={() => { onClear(); setOpen(false) }}
-                className="text-red-500"
-              >
-                Clear
-              </button>
-
-              <button
-                onClick={() => { onSave(temp); setOpen(false) }}
-                className="px-6 py-2 bg-[#2FA6DE] text-white rounded-full"
-              >
+              <button onClick={() => { onClear(); setOpen(false) }} className="text-red-500">Clear</button>
+              <button onClick={() => { onSave(temp); setOpen(false) }}
+                className="px-6 py-2 bg-[#2FA6DE] text-white rounded-full">
                 Done
               </button>
             </div>
-
           </div>
         </div>
       )}
@@ -344,18 +281,11 @@ interface InputProps {
 function Input({ label, value, type = 'text', icon, onChange }: InputProps) {
   return (
     <div>
-      <label className="text-sm font-semibold">
-        {label} <span className="text-red-500">*</span>
-      </label>
-
+      <label className="text-sm font-semibold">{label} <span className="text-red-500">*</span></label>
       <div className="relative mt-2">
-        <input
-          type={type}
-          value={value}
-          onChange={onChange}
+        <input type={type} value={value} onChange={onChange}
           className={`w-full py-3 rounded-full border-2 border-[#2FA6DE]
-            ${icon ? 'pl-5 pr-12' : 'px-5'}`}
-        />
+            ${icon ? 'pl-5 pr-12' : 'px-5'}`} />
         {icon && (
           <span className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-500">
             {icon}
