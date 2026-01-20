@@ -72,15 +72,13 @@ export default function SchedulePage() {
   return (
     <div className="h-screen w-screen bg-gray-50 overflow-hidden flex flex-col">
       {/* HEADER */}
-      <div className="z-30 px-4 pt-4 shrink-0">
-        <div className="max-w-[1600px] mx-auto">
-          <div className="bg-white rounded-full shadow-lg px-6 py-3 flex items-center gap-4">
-            <button onClick={() => router.push('/menu')} className="w-11 h-11 rounded-full hover:bg-gray-200 flex items-center justify-center">
-              <IoArrowBack size={24} />
-            </button>
-            <Image src={plnKecil} alt="PLN" width={40} height={40} />
-            <h1 className="text-lg font-medium">Schedule GH GB MC</h1>
-          </div>
+      <div className="px-4 pt-4">
+        <div className="bg-white rounded-full shadow-lg px-6 py-2 flex items-center gap-3">
+          <button onClick={() => router.push('/menu')} className="w-11 h-11 rounded-full hover:bg-gray-200 flex items-center justify-center">
+            <IoArrowBack size={24} />
+          </button>
+          <Image src={plnKecil} alt="pln" width={36} height={36} />
+          <h1 className="font-medium">Schedule GN GN MC</h1>
         </div>
       </div>
 
