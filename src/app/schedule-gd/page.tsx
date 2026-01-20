@@ -1,6 +1,6 @@
 'use client';
 import React, { useState } from 'react';
-import { ChevronLeft, ChevronRight, Plus } from 'lucide-react';
+import { Bold, ChevronLeft, ChevronRight, Plus } from 'lucide-react';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import { IoArrowBack } from 'react-icons/io5';
@@ -78,7 +78,7 @@ export default function SchedulePage() {
             <IoArrowBack size={24} />
           </button>
           <Image src={plnKecil} alt="pln" width={36} height={36} />
-          <h1 className="font-medium">Schedule GN GN MC</h1>
+          <h1 className="font-medium">Schedule GD</h1>
         </div>
       </div>
 
@@ -192,7 +192,7 @@ export default function SchedulePage() {
       </div>
 
       {/* ADD */}
-      <button className="fixed bottom-8 right-8 w-14 h-14 bg-teal-500 text-white rounded-full shadow-lg flex items-center justify-center">
+      <button className="fixed bottom-8 right-8 w-14 h-14 bg-cyan-500 text-white rounded-full shadow-lg flex items-center justify-center">
         <Plus size={26} />
       </button>
     </div>
