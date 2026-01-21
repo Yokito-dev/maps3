@@ -144,7 +144,7 @@ export default function Page() {
                         <div className="flex gap-3 text-white font-medium">
                             <Link
                                 href="/dashboard"
-                                className={`px-4 py-1.5 rounded-full transition ${pathname === "/dashboard"
+                                className={`px-4 py-1.5 rounded-full transition ${pathname === "/menu"
                                     ? "bg-white/20 text-white shadow-sm"
                                     : "text-white/80 hover:bg-white/20 hover:text-white"
                                     }`}>

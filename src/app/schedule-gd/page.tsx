@@ -73,7 +73,7 @@ export default function SchedulePage() {
     <div className="h-screen w-screen bg-gray-50 overflow-hidden flex flex-col">
       {/* HEADER */}
       <div className="px-4 pt-4">
-        <div className="bg-white rounded-full shadow-lg px-6 py-2 flex items-center gap-3">
+        <div className="bg-white rounded-full shadow-lg px-6 py-1 flex items-center gap-3">
           <button onClick={() => router.push('/menu')} className="w-11 h-11 rounded-full hover:bg-gray-200 flex items-center justify-center">
             <IoArrowBack size={24} />
           </button>
@@ -160,17 +160,6 @@ export default function SchedulePage() {
         {/* MINGGU */}
         {view === 'week' && (
           <div className="bg-white border rounded-lg flex-1 flex flex-col overflow-hidden">
-
-            {/* HEADER */}
-            <div className="grid grid-cols-8 bg-gray-50 border-b shrink-0">
-              <div />
-              {weeks.map((d, i) => (
-                <div key={i} className="text-center py-3 border-l">
-                  <div className="text-xs font-bold">{hariPendek[d.getDay()]}</div>
-                  <div className="text-sm font-bold">{d.getDate()}</div>
-                </div>
-              ))}
-            </div>
 
             {/* BODY SCROLL */}
             <div className="flex-1 overflow-y-auto">

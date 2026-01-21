@@ -29,10 +29,10 @@ export default function Page() {
     const progressOptions: {
         key: ProgressKey
         label: string
-        color: "green" | "blue"
+        color: "green" | "red"
     }[] = [
             { key: "on", label: "On Schedule", color: "green" },
-            { key: "close", label: "Close Inspeksi", color: "blue" },
+            { key: "close", label: "Close Inspeksi", color: "red" },
         ]
 
 
@@ -148,23 +148,18 @@ export default function Page() {
         form.keterangan &&
         progress !== null
 
-
-
-    if (loading) {
-        return <div className="p-10">Loading data dari Spreadsheet...</div>
-    }
-
     return (
-        <div className="h-screen overflow-hidden font-poppins">
+        <div className="min-h-screen font-poppins">
 
             {/* BACKGROUND */}
             <div className="fixed inset-0 -z-10">
-                <Image src={bg} alt="bg" fill className="object-cover" />
+                <Image src={bg} alt="Background" fill className="object-cover" priority />
             </div>
+            <div className="fixed inset-0 -z-10 bg-gradient-to-t from-[#165F67]/70 via-[#67C2E9]/30 to-transparent backdrop-blur-sm" />
 
             {/* HEADER */}
             <div className="px-4 pt-3">
-                <div className="bg-white rounded-full shadow-lg px-6 py-2 flex items-center gap-3">
+                <div className="bg-white rounded-full shadow-lg px-6 py-1 flex items-center gap-3">
                     <button onClick={() => router.push('/menu')} className="w-11 h-11 rounded-full hover:bg-gray-200 flex items-center justify-center">
                         <IoArrowBack size={24} />
                     </button>
@@ -174,77 +169,47 @@ export default function Page() {
             </div>
 
             {/* CONTENT */}
-            <main className="h-full flex justify-center items-start p-4">
-                <div className="bg-white rounded-3xl shadow-xl p-10 w-full max-w-[1200px] h-[82vh] overflow-y-auto">
+            <main className="flex justify-center items-start px-0 pt-4
+  h-[calc(100vh-72px)] overflow-hidden
+  md:h-full md:p-4">
 
+                <div className="bg-white shadow-xl w-full
+    h-full overflow-y-auto rounded-t-[28px] rounded-b-none px-5 py-6 max-w-none
+    md:h-[82vh] md:overflow-y-auto md:rounded-3xl md:p-10 md:max-w-[1200px]">
 
                     {/* GRID UTAMA */}
-                    <div className="grid grid-cols-2 gap-x-10 gap-y-8">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-x-10">
 
-                        {/* ===== ROW 1 ===== */}
-                        <Input label="UP3" value={form.up3} readOnly />
+                        {/* ===== KOLOM KIRI ===== */}
+                        <div className="flex flex-col gap-6">
 
-                        <div>
-                            <label className="text-sm font-semibold">
-                                KMS Inspeksi <span className="text-red-500">*</span>
-                            </label>
-                            <div className="flex items-center gap-3 mt-2">
-                                <input
-                                    value={form.kms}
-                                    readOnly
-                                    className="flex-1 py-3 px-5 border-2 border-[#2FA6DE] rounded-full"/>
-                                <button onClick={() => changeKms(-1)} className="w-12 h-12 border rounded-full text-xl">−</button>
-                                <button onClick={() => changeKms(1)} className="w-12 h-12 border rounded-full text-xl">+</button>
-                            </div>
-                        </div>
+                            <Input label="UP3" value={form.up3} readOnly />
 
-                        {/* ===== ROW 2 ===== */}
-                        <PopupSelect
-                            label="ULP"
-                            value={form.ulp}
-                            options={ULP_LIST}
-                            onSave={v => {
-                                handleChange("ulp", v)
-                                handleChange("penyulang", "")
-                                handleChange("zona", "")
-                                handleChange("section", "")
-                            }}
-                            onClear={() => handleChange("ulp", "")}/>
+                            <PopupSelect
+                                label="ULP"
+                                value={form.ulp}
+                                options={ULP_LIST}
+                                onSave={v => {
+                                    handleChange("ulp", v)
+                                    handleChange("penyulang", "")
+                                    handleChange("zona", "")
+                                    handleChange("section", "")
+                                }}
+                                onClear={() => handleChange("ulp", "")}
+                            />
 
-                        <Input
-                            label="Schedule Date"
-                            type="date"
-                            value={form.scheduleDate}
-                            onChange={e => handleChange("scheduleDate", e.target.value)}/>
+                            <PopupSelect
+                                label="Penyulang"
+                                value={form.penyulang}
+                                options={PENYULANG_BY_ULP[form.ulp] || []}
+                                onSave={v => {
+                                    handleChange("penyulang", v)
+                                    handleChange("zona", "")
+                                    handleChange("section", "")
+                                }}
+                                onClear={() => handleChange("penyulang", "")}
+                            />
 
-                        {/* ===== ROW 3 ===== */}
-                        <PopupSelect
-                            label="Penyulang"
-                            value={form.penyulang}
-                            options={PENYULANG_BY_ULP[form.ulp] || []}
-                            onSave={v => {
-                                handleChange("penyulang", v)
-                                handleChange("zona", "")
-                                handleChange("section", "")
-                            }}
-                            onClear={() => handleChange("penyulang", "")}/>
-
-                        <PopupSelect
-                            label="Tujuan Penjadwalan"
-                            value={form.tujuan}
-                            options={[
-                                "Untuk Inspeksi Preventif",
-                                "Untuk Pemeliharaan Korektif",
-                                "Untuk PTT",
-                                "Untuk Inspeksi Drone",
-                            ]}
-                            onSave={v => handleChange("tujuan", v)}
-                            onClear={() => handleChange("tujuan", "")}/>
-
-                        {/* ===== ROW 4 ===== */}
-                        <div
-                            className={`transition ${!form.penyulang ? 'opacity-40 pointer-events-none' : ''
-                                }`}>
                             <PopupSelect
                                 label="Zona Proteksi"
                                 value={form.zona}
@@ -254,78 +219,129 @@ export default function Page() {
                                     handleChange("zona", v)
                                     handleChange("section", "")
                                 }}
-                                onClear={() => handleChange("zona", "")}/>
-                        </div>
+                                onClear={() => handleChange("zona", "")}
+                            />
 
-
-                        <PopupSelect
-                            label="Keterangan Jadwal"
-                            value={form.keterangan}
-                            options={[
-                                "Schedule Untuk Pegawai",
-                                "Schedule Untuk Inspektor",
-                                "Schedule Untuk Tim ROW",
-                                "Schedule Untuk Tim Yantek",
-                                "Schedule Untuk Tim KHS",
-                            ]}
-                            onSave={v => handleChange("keterangan", v)}
-                            onClear={() => handleChange("keterangan", "")}/>
-
-                        {/* ===== ROW 5 ===== */}
-                        <div
-                            className={`transition ${!form.zona ? 'opacity-40 pointer-events-none' : ''
-                                }`}>
                             <PopupSelect
                                 label="Section"
                                 value={form.section}
                                 options={SECTION_BY_ZONA[form.zona] || []}
                                 disabled={!form.zona}
                                 onSave={v => handleChange("section", v)}
-                                onClear={() => handleChange("section", "")}/>
+                                onClear={() => handleChange("section", "")}
+                            />
+
+                            <Input label="Panjang Aset" value={form.panjangAset} readOnly />
 
                         </div>
 
-                        <div>
-                            <label className="text-sm font-semibold">
-                                Progress <span className="text-red-500">*</span>
-                            </label>
-                            <div className="flex gap-6 mt-3">
-                                {progressOptions.map(item => (
-                                    <div
-                                        key={item.key}
-                                        onClick={() => setProgress(item.key)}
-                                        className="flex items-center gap-3 cursor-pointer">
+                        {/* ===== KOLOM KANAN ===== */}
+                        <div className="flex flex-col gap-6">
 
-                                        <div
-                                            className={`w-12 h-12 rounded-full border-2 flex items-center justify-center ${progress === item.key
-                                                ? item.color === "green"
-                                                    ? "bg-green-500 border-green-500"
-                                                    : "bg-blue-500 border-blue-500"
-                                                : "border-gray-400"
-                                                }`}>
-                                            {progress === item.key && <span className="text-white text-lg">✓</span>}
-                                        </div>
-                                        <span className="font-medium">{item.label}</span>
-                                    </div>
-                                ))}
+                            {/* KMS */}
+                            <div>
+                                <label className="text-sm font-semibold">
+                                    KMS Inspeksi <span className="text-red-500">*</span>
+                                </label>
+                                <div className="flex items-center gap-3 mt-2">
+                                    <input
+                                        value={form.kms}
+                                        readOnly
+                                        className="flex-1 py-3 px-5 border-2 border-[#2FA6DE] rounded-full"
+                                    />
+                                    <button onClick={() => changeKms(-1)} className="w-12 h-12 border rounded-full text-xl">−</button>
+                                    <button onClick={() => changeKms(1)} className="w-12 h-12 border rounded-full text-xl">+</button>
+                                </div>
                             </div>
+
+                            {/* SCHEDULE DATE */}
+                            <div>
+                                <label className="text-sm font-semibold">
+                                    Schedule Date <span className="text-red-500">*</span>
+                                </label>
+                                <input
+                                    type="date"
+                                    value={form.scheduleDate}
+                                    onChange={e => handleChange("scheduleDate", e.target.value)}
+                                    className={`mt-2 w-full py-3 px-5 border-2 border-[#2FA6DE] rounded-full ${form.scheduleDate ? 'text-black' : 'text-gray-400'
+                                        }`}
+                                />
+                            </div>
+
+                            <PopupSelect
+                                label="Tujuan Penjadwalan"
+                                searchable={false}
+                                value={form.tujuan}
+                                options={[
+                                    "Untuk Inspeksi Preventif",
+                                    "Untuk Pemeliharaan Korektif",
+                                    "Untuk PTT",
+                                    "Untuk Inspeksi Drone",
+                                ]}
+                                onSave={v => handleChange("tujuan", v)}
+                                onClear={() => handleChange("tujuan", "")}
+                            />
+
+                            <PopupSelect
+                                label="Keterangan Jadwal"
+                                value={form.keterangan}
+                                searchable={false}
+                                options={[
+                                    "Schedule Untuk Pegawai",
+                                    "Schedule Untuk Inspektor",
+                                    "Schedule Untuk Tim ROW",
+                                    "Schedule Untuk Tim Yantek",
+                                    "Schedule Untuk Tim KHS",
+                                ]}
+                                onSave={v => handleChange("keterangan", v)}
+                                onClear={() => handleChange("keterangan", "")}
+                            />
+
+                            {/* PROGRESS */}
+                            <div>
+                                <label className="text-sm font-semibold">
+                                    Progress <span className="text-red-500">*</span>
+                                </label>
+                                <div className="flex gap-6 mt-3">
+                                    {progressOptions.map(item => (
+                                        <div
+                                            key={item.key}
+                                            onClick={() => setProgress(item.key)}
+                                            className="flex items-center gap-3 cursor-pointer"
+                                        >
+                                            <div
+                                                className={`w-12 h-12 rounded-full border-2 flex items-center justify-center ${progress === item.key
+                                                    ? item.color === "green"
+                                                        ? "bg-green-500 border-green-500"
+                                                        : "bg-blue-500 border-blue-500"
+                                                    : "border-gray-400"
+                                                    }`}
+                                            >
+                                                {progress === item.key && (
+                                                    <span className="text-white text-lg">✓</span>
+                                                )}
+                                            </div>
+                                            <span className="font-medium">{item.label}</span>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+
+                            {/* ACTION */}
+                            <div className="flex gap-4 mt-8 items-end">
+                                <button className="flex-1 py-3 bg-red-500 text-white rounded-full">
+                                    Cancel
+                                </button>
+
+                                <button
+                                    disabled={!isValid}
+                                    className={`flex-1 py-3 rounded-full text-white ${isValid ? "bg-[#2FA6DE]" : "bg-gray-400 cursor-not-allowed"
+                                        }`}>
+                                    Submit
+                                </button>
+                            </div>
+
                         </div>
-
-                        {/* ===== ROW 6 ===== */}
-                        <Input label="Panjang Aset" value={form.panjangAset} readOnly />
-
-                        {/* ACTION — SEJAJAR INPUT */}
-                        <div className="flex gap-4 items-end">
-                            <button className="px-10 py-3 bg-red-500 text-white rounded-full">
-                                Cancel
-                            </button>
-                            <button
-                                disabled={!isValid}
-                                className={`px-10 py-3 rounded-full text-white ${isValid ? "bg-[#2FA6DE]" : "bg-gray-400 cursor-not-allowed"}`}>
-                                Submit
-                            </button>
-                        </div>
-
                     </div>
                 </div>
             </main>
@@ -343,6 +359,7 @@ function PopupSelect({
     onSave,
     onClear,
     disabled = false,
+    searchable = true,
 }: {
     label: string
     value: string
@@ -350,7 +367,9 @@ function PopupSelect({
     onSave: (v: string) => void
     onClear: () => void
     disabled?: boolean
+    searchable?: boolean
 }) {
+
     const [open, setOpen] = useState(false)
     const [search, setSearch] = useState('')
 
@@ -369,8 +388,7 @@ function PopupSelect({
         transition
         ${disabled
                         ? 'opacity-40 blur-[0.5px] cursor-not-allowed'
-                        : 'cursor-pointer'}
-    `}>
+                        : 'cursor-pointer'}`}>
 
                 <label className="text-sm font-semibold">
                     {label} <span className="text-red-500">*</span>
@@ -387,7 +405,7 @@ function PopupSelect({
             {open && (
                 <div
                     className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center"
-                    onClick={() => setOpen(false)}   // ⬅️ klik luar = close
+                    onClick={() => setOpen(false)}   // ⬅️ klik luar = close 
                 >
                     <div
                         onClick={e => e.stopPropagation()}
@@ -396,11 +414,13 @@ function PopupSelect({
                         <h2 className="font-bold text-lg mb-3">{label}</h2>
 
                         {/* SEARCH */}
-                        <input
-                            placeholder="Cari..."
-                            value={search}
-                            onChange={e => setSearch(e.target.value)}
-                            className="mb-3 px-4 py-2 border rounded-lg"/>
+                        {searchable && (
+                            <input
+                                placeholder="Cari..."
+                                value={search}
+                                onChange={e => setSearch(e.target.value)}
+                                className="mb-3 px-4 py-2 border rounded-lg" />
+                        )}
 
                         {/* LIST */}
                         <div className="overflow-y-auto flex-1">
@@ -466,7 +486,7 @@ function Input({
                 readOnly={readOnly}
                 onChange={onChange}
                 className={`mt-2 w-full py-3 px-5 border-2 border-[#2FA6DE] rounded-full ${readOnly ? 'bg-gray-100 cursor-not-allowed' : ''
-                    }`}/>
+                    }`} />
         </div>
     )
 }
