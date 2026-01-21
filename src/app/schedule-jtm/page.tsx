@@ -72,8 +72,8 @@ export default function SchedulePage() {
   return (
     <div className="h-screen w-screen bg-gray-50 overflow-hidden flex flex-col">
       {/* HEADER */}
-      <div className="px-4 pt-4">
-        <div className="bg-white rounded-full shadow-lg px-6 py-2 flex items-center gap-3">
+      <div className="px-4 pt-3">
+        <div className="bg-white rounded-full shadow-lg px-6 py-1 flex items-center gap-3">
           <button onClick={() => router.push('/menu')} className="w-11 h-11 rounded-full hover:bg-gray-200 flex items-center justify-center">
             <IoArrowBack size={24} />
           </button>
@@ -192,7 +192,7 @@ export default function SchedulePage() {
       </div>
 
       {/* ADD */}
-      <button className="fixed bottom-8 right-8 w-14 h-14 bg-teal-500 text-white rounded-full shadow-lg flex items-center justify-center">
+      <button className="fixed bottom-8 right-8 w-14 h-14 bg-cyan-500 text-white rounded-full shadow-lg flex items-center justify-center">
         <Plus size={26} />
       </button>
     </div>
