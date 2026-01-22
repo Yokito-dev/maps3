@@ -123,8 +123,8 @@ export default function Page() {
             if (row) {
                 setForm(p => ({
                     ...p,
-                    panjangAset: row.kms.toString(), // ⬅️ convert ke string
-                    kms: row.kms.toString(),         // ⬅️ convert ke string
+                    panjangAset: row.kms.toString(),
+                    kms: row.kms.toString(),
                 }))
             }
 
@@ -149,7 +149,7 @@ export default function Page() {
         progress !== null
 
     return (
-        <div className="min-h-screen font-poppins">
+        <div className="h-screen overflow-hidden font-poppins flex flex-col">
 
             {/* BACKGROUND */}
             <div className="fixed inset-0 -z-10">
@@ -158,7 +158,7 @@ export default function Page() {
             <div className="fixed inset-0 -z-10 bg-gradient-to-t from-[#165F67]/70 via-[#67C2E9]/30 to-transparent backdrop-blur-sm" />
 
             {/* HEADER */}
-            <div className="px-4 pt-3">
+            <div className="px-4 pt-3 shrink-0">
                 <div className="bg-white rounded-full shadow-lg px-6 py-1 flex items-center gap-3">
                     <button onClick={() => router.push('/menu')} className="w-11 h-11 rounded-full hover:bg-gray-200 flex items-center justify-center">
                         <IoArrowBack size={24} />
@@ -169,179 +169,190 @@ export default function Page() {
             </div>
 
             {/* CONTENT */}
-            <main className="flex justify-center items-start px-0 pt-4
-  h-[calc(100vh-72px)] overflow-hidden
-  md:h-full md:p-4">
+            <main className="flex-1 flex justify-center items-start px-0 pt-4 md:p-4 overflow-hidden">
 
-                <div className="bg-white shadow-xl w-full
-    h-full overflow-y-auto rounded-t-[28px] rounded-b-none px-5 py-6 max-w-none
-    md:h-[82vh] md:overflow-y-auto md:rounded-3xl md:p-10 md:max-w-[1200px]">
+                <div
+                    className="
+                    bg-white shadow-xl w-full
+                    flex flex-col h-full overflow-hidden
+                    rounded-t-[28px] rounded-b-none
+                    px-5 py-6
+                    md:h-[82vh]
+                    md:rounded-3xl
+                    md:p-10
+                    md:max-w-[1200px]">
 
-                    {/* GRID UTAMA */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-x-10">
+                    {/* WRAPPER KHUSUS DESKTOP */}
+                    <div className="flex-1 overflow-y-auto">
 
-                        {/* ===== KOLOM KIRI ===== */}
-                        <div className="flex flex-col gap-6">
-
-                            <Input label="UP3" value={form.up3} readOnly />
-
-                            <PopupSelect
-                                label="ULP"
-                                value={form.ulp}
-                                options={ULP_LIST}
-                                onSave={v => {
-                                    handleChange("ulp", v)
-                                    handleChange("penyulang", "")
-                                    handleChange("zona", "")
-                                    handleChange("section", "")
-                                }}
-                                onClear={() => handleChange("ulp", "")}
-                            />
-
-                            <PopupSelect
-                                label="Penyulang"
-                                value={form.penyulang}
-                                options={PENYULANG_BY_ULP[form.ulp] || []}
-                                onSave={v => {
-                                    handleChange("penyulang", v)
-                                    handleChange("zona", "")
-                                    handleChange("section", "")
-                                }}
-                                onClear={() => handleChange("penyulang", "")}
-                            />
-
-                            <PopupSelect
-                                label="Zona Proteksi"
-                                value={form.zona}
-                                options={ZONA_BY_PENYULANG[form.penyulang] || []}
-                                disabled={!form.penyulang}
-                                onSave={v => {
-                                    handleChange("zona", v)
-                                    handleChange("section", "")
-                                }}
-                                onClear={() => handleChange("zona", "")}
-                            />
-
-                            <PopupSelect
-                                label="Section"
-                                value={form.section}
-                                options={SECTION_BY_ZONA[form.zona] || []}
-                                disabled={!form.zona}
-                                onSave={v => handleChange("section", v)}
-                                onClear={() => handleChange("section", "")}
-                            />
-
-                            <Input label="Panjang Aset" value={form.panjangAset} readOnly />
-
-                        </div>
-
-                        {/* ===== KOLOM KANAN ===== */}
-                        <div className="flex flex-col gap-6">
-
-                            {/* KMS */}
-                            <div>
-                                <label className="text-sm font-semibold">
-                                    KMS Inspeksi <span className="text-red-500">*</span>
-                                </label>
-                                <div className="flex items-center gap-3 mt-2">
-                                    <input
-                                        value={form.kms}
-                                        readOnly
-                                        className="flex-1 py-3 px-5 border-2 border-[#2FA6DE] rounded-full"
-                                    />
-                                    <button onClick={() => changeKms(-1)} className="w-12 h-12 border rounded-full text-xl">−</button>
-                                    <button onClick={() => changeKms(1)} className="w-12 h-12 border rounded-full text-xl">+</button>
-                                </div>
+                        {/* ===== LOADING CONDITIONAL ===== */}
+                        {loading ? (
+                            <div className="h-full flex items-center justify-center">
+                                <p className="text-gray-500 text-lg font-medium">
+                                    Loading...
+                                </p>
                             </div>
+                        ) : (
+                            /* ===== FORM GRID ===== */
+                            <div className="min-h-full md:flex md:items-center">
+                                <div className="grid w-full grid-cols-1 md:grid-cols-2 gap-x-10 gap-y-8">
 
-                            {/* SCHEDULE DATE */}
-                            <div>
-                                <label className="text-sm font-semibold">
-                                    Schedule Date <span className="text-red-500">*</span>
-                                </label>
-                                <input
-                                    type="date"
-                                    value={form.scheduleDate}
-                                    onChange={e => handleChange("scheduleDate", e.target.value)}
-                                    className={`mt-2 w-full py-3 px-5 border-2 border-[#2FA6DE] rounded-full ${form.scheduleDate ? 'text-black' : 'text-gray-400'
-                                        }`}
-                                />
-                            </div>
+                                    {/* KOLOM KIRI */}
+                                    <div className="flex flex-col gap-6">
+                                        <Input label="UP3" value={form.up3} readOnly />
+                                        <PopupSelect
+                                            label="ULP"
+                                            value={form.ulp}
+                                            options={ULP_LIST}
+                                            onSave={v => {
+                                                handleChange("ulp", v)
+                                                handleChange("penyulang", "")
+                                                handleChange("zona", "")
+                                                handleChange("section", "")
+                                            }}
+                                            onClear={() => handleChange("ulp", "")}
+                                            searchable={false}
+                                        />
+                                        <PopupSelect
+                                            label="Penyulang"
+                                            value={form.penyulang}
+                                            options={PENYULANG_BY_ULP[form.ulp] || []}
+                                            onSave={v => {
+                                                handleChange("penyulang", v)
+                                                handleChange("zona", "")
+                                                handleChange("section", "")
+                                            }}
+                                            onClear={() => handleChange("penyulang", "")}
+                                            searchable={false}
+                                        />
+                                        <PopupSelect
+                                            label="Zona Proteksi"
+                                            value={form.zona}
+                                            options={ZONA_BY_PENYULANG[form.penyulang] || []}
+                                            disabled={!form.penyulang}
+                                            onSave={v => {
+                                                handleChange("zona", v)
+                                                handleChange("section", "")
+                                            }}
+                                            onClear={() => handleChange("zona", "")}
+                                            searchable={false}
+                                        />
+                                        <PopupSelect
+                                            label="Section"
+                                            value={form.section}
+                                            options={SECTION_BY_ZONA[form.zona] || []}
+                                            disabled={!form.zona}
+                                            onSave={v => handleChange("section", v)}
+                                            onClear={() => handleChange("section", "")}
+                                            searchable={true}
+                                        />
+                                        <Input label="Panjang Aset" value={form.panjangAset} readOnly />
+                                    </div>
 
-                            <PopupSelect
-                                label="Tujuan Penjadwalan"
-                                searchable={false}
-                                value={form.tujuan}
-                                options={[
-                                    "Untuk Inspeksi Preventif",
-                                    "Untuk Pemeliharaan Korektif",
-                                    "Untuk PTT",
-                                    "Untuk Inspeksi Drone",
-                                ]}
-                                onSave={v => handleChange("tujuan", v)}
-                                onClear={() => handleChange("tujuan", "")}
-                            />
-
-                            <PopupSelect
-                                label="Keterangan Jadwal"
-                                value={form.keterangan}
-                                searchable={false}
-                                options={[
-                                    "Schedule Untuk Pegawai",
-                                    "Schedule Untuk Inspektor",
-                                    "Schedule Untuk Tim ROW",
-                                    "Schedule Untuk Tim Yantek",
-                                    "Schedule Untuk Tim KHS",
-                                ]}
-                                onSave={v => handleChange("keterangan", v)}
-                                onClear={() => handleChange("keterangan", "")}
-                            />
-
-                            {/* PROGRESS */}
-                            <div>
-                                <label className="text-sm font-semibold">
-                                    Progress <span className="text-red-500">*</span>
-                                </label>
-                                <div className="flex gap-6 mt-3">
-                                    {progressOptions.map(item => (
-                                        <div
-                                            key={item.key}
-                                            onClick={() => setProgress(item.key)}
-                                            className="flex items-center gap-3 cursor-pointer"
-                                        >
-                                            <div
-                                                className={`w-12 h-12 rounded-full border-2 flex items-center justify-center ${progress === item.key
-                                                    ? item.color === "green"
-                                                        ? "bg-green-500 border-green-500"
-                                                        : "bg-blue-500 border-blue-500"
-                                                    : "border-gray-400"
-                                                    }`}
-                                            >
-                                                {progress === item.key && (
-                                                    <span className="text-white text-lg">✓</span>
-                                                )}
+                                    {/* KOLOM KANAN */}
+                                    <div className="flex flex-col gap-6">
+                                        {/* KMS */}
+                                        <div>
+                                            <label className="text-sm font-semibold">
+                                                KMS Inspeksi <span className="text-red-500">*</span>
+                                            </label>
+                                            <div className="flex items-center gap-3 mt-2">
+                                                <input
+                                                    value={form.kms}
+                                                    readOnly
+                                                    className="flex-1 py-3 px-5 border-2 border-[#2FA6DE] rounded-full"
+                                                />
+                                                <button onClick={() => changeKms(-1)} className="w-12 h-12 border rounded-full text-xl">−</button>
+                                                <button onClick={() => changeKms(1)} className="w-12 h-12 border rounded-full text-xl">+</button>
                                             </div>
-                                            <span className="font-medium">{item.label}</span>
                                         </div>
-                                    ))}
+
+                                        {/* Schedule Date */}
+                                        <div>
+                                            <label className="text-sm font-semibold">
+                                                Schedule Date <span className="text-red-500">*</span>
+                                            </label>
+                                            <input
+                                                type="date"
+                                                value={form.scheduleDate}
+                                                onChange={e => handleChange("scheduleDate", e.target.value)}
+                                                className={`mt-2 w-full py-3 px-5 border-2 border-[#2FA6DE] rounded-full ${form.scheduleDate ? "text-black" : "text-gray-400"}`}
+                                            />
+                                        </div>
+
+                                        <PopupSelect
+                                            label="Tujuan Penjadwalan"
+                                            value={form.tujuan}
+                                            options={[
+                                                "Untuk Inspeksi Preventif",
+                                                "Untuk Pemeliharaan Korektif",
+                                                "Untuk PTT",
+                                                "Untuk Inspeksi Drone",
+                                            ]}
+                                            onSave={v => handleChange("tujuan", v)}
+                                            onClear={() => handleChange("tujuan", "")}
+                                            searchable={false}
+                                        />
+
+                                        <PopupSelect
+                                            label="Keterangan Jadwal"
+                                            value={form.keterangan}
+                                            options={[
+                                                "Schedule Untuk Pegawai",
+                                                "Schedule Untuk Inspektor",
+                                                "Schedule Untuk Tim ROW",
+                                                "Schedule Untuk Tim Yantek",
+                                                "Schedule Untuk Tim KHS",
+                                            ]}
+                                            onSave={v => handleChange("keterangan", v)}
+                                            onClear={() => handleChange("keterangan", "")}
+                                            searchable={false}
+                                        />
+
+                                        {/* Progress */}
+                                        <div>
+                                            <label className="text-sm font-semibold">
+                                                Progress <span className="text-red-500">*</span>
+                                            </label>
+                                            <div className="flex gap-6 mt-3">
+                                                {progressOptions.map(item => (
+                                                    <div
+                                                        key={item.key}
+                                                        onClick={() => setProgress(item.key)}
+                                                        className="flex items-center gap-3 cursor-pointer"
+                                                    >
+                                                        <div className={`w-12 h-12 rounded-full border-2 flex items-center justify-center ${progress === item.key
+                                                            ? item.color === "green"
+                                                                ? "bg-green-500 border-green-500"
+                                                                : "bg-blue-500 border-blue-500"
+                                                            : "border-gray-400"
+                                                            }`}
+                                                        >
+                                                            {progress === item.key && <span className="text-white text-lg">✓</span>}
+                                                        </div>
+                                                        <span className="font-medium">{item.label}</span>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+
+                                        {/* Action */}
+                                        <div className="flex gap-4 mt-8 items-end">
+                                            <button className="flex-1 py-3 bg-red-500 text-white rounded-full">
+                                                Cancel
+                                            </button>
+                                            <button
+                                                disabled={!isValid}
+                                                className={`flex-1 py-3 rounded-full text-white ${isValid ? "bg-[#2FA6DE]" : "bg-gray-400 cursor-not-allowed"}`}>
+                                                Submit
+                                            </button>
+                                        </div>
+
+                                    </div>
                                 </div>
                             </div>
-
-                            {/* ACTION */}
-                            <div className="flex gap-4 mt-8 items-end">
-                                <button className="flex-1 py-3 bg-red-500 text-white rounded-full">
-                                    Cancel
-                                </button>
-
-                                <button
-                                    disabled={!isValid}
-                                    className={`flex-1 py-3 rounded-full text-white ${isValid ? "bg-[#2FA6DE]" : "bg-gray-400 cursor-not-allowed"
-                                        }`}>
-                                    Submit
-                                </button>
-                            </div>
-
-                        </div>
+                        )}
+                        {/* ======== END LOADING CONDITIONAL ======== */}
                     </div>
                 </div>
             </main>
@@ -381,22 +392,11 @@ function PopupSelect({
         <>
             {/* FIELD */}
             <div
-                onClick={() => {
-                    if (!disabled) setOpen(true)
-                }}
-                className={`
-        transition
-        ${disabled
-                        ? 'opacity-40 blur-[0.5px] cursor-not-allowed'
-                        : 'cursor-pointer'}`}>
-
-                <label className="text-sm font-semibold">
-                    {label} <span className="text-red-500">*</span>
-                </label>
-                <div className="mt-2 px-5 py-3 border-2 border-[#2FA6DE] rounded-full flex items-center justify-between">
-                    <span className={value ? '' : 'text-gray-400'}>
-                        {value || `Pilih ${label}`}
-                    </span>
+                onClick={() => !disabled && setOpen(true)}
+                className={`transition ${disabled ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer hover:scale-[1.01]'}`}>
+                <label className="text-sm font-semibold">{label} <span className="text-red-500">*</span></label>
+                <div className="mt-2 px-5 py-3 border-2 border-[#2FA6DE] rounded-full flex justify-between items-center">
+                    <span className={value ? '' : 'text-gray-400'}>{value || `Pilih ${label}`}</span>
                     <IoChevronDown />
                 </div>
             </div>
@@ -405,8 +405,7 @@ function PopupSelect({
             {open && (
                 <div
                     className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center"
-                    onClick={() => setOpen(false)}   // ⬅️ klik luar = close 
-                >
+                    onClick={() => setOpen(false)}>
                     <div
                         onClick={e => e.stopPropagation()}
                         className=" bg-white  p-6  rounded-xl  w-[700px]  max-h-[75vh]  flex flex-col">
@@ -429,13 +428,14 @@ function PopupSelect({
                                     key={o}
                                     onClick={() => {
                                         onSave(o)
-                                        setOpen(false)     // ⬅️ auto close saat pilih
+                                        setOpen(false)
                                         setSearch('')
                                     }}
-                                    className={`py-2 px-2 cursor-pointer hover:bg-gray-100 rounded ${value === o ? 'font-bold bg-gray-100' : ''
-                                        }`}>
+                                    className={`py-2 px-3 cursor-pointer rounded-lg transition-all duration-2
+                                    ${value === o ? 'font-bold text-blue-600' : 'hover:bg-gray-100'}`}>
                                     {o}
                                 </div>
+
                             ))}
 
                             {filtered.length === 0 && (

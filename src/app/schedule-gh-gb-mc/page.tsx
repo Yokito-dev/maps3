@@ -54,8 +54,8 @@ export default function SchedulePage() {
   const getEvents = (d: Date | null) =>
     d
       ? events
-          .filter(e => sameDay(e.date, d))
-          .sort((a, b) => a.startTime.localeCompare(b.startTime))
+        .filter(e => sameDay(e.date, d))
+        .sort((a, b) => a.startTime.localeCompare(b.startTime))
       : [];
 
   const getDaysInMonth = (d: Date) => {
@@ -118,13 +118,13 @@ export default function SchedulePage() {
     <div className="h-screen w-screen bg-gray-50 overflow-hidden flex flex-col">
 
       {/* HEADER */}
-      <div className="px-4 pt-4">
-        <div className="bg-white rounded-full shadow-lg px-6 py-2 flex items-center gap-3">
+      <div className="px-4 pt-3">
+        <div className="bg-white rounded-full shadow-lg px-6 py-1 flex items-center gap-3">
           <button onClick={() => router.push('/menu')} className="w-11 h-11 rounded-full hover:bg-gray-200 flex items-center justify-center">
             <IoArrowBack size={24} />
           </button>
           <Image src={plnKecil} alt="pln" width={36} height={36} />
-          <h1 className="font-medium">Schedule GN GN MC</h1>
+          <h1 className="font-medium">Schedule GH GB MC</h1>
         </div>
       </div>
 
@@ -139,9 +139,8 @@ export default function SchedulePage() {
                 <button
                   key={v}
                   onClick={() => setView(v as any)}
-                  className={`px-5 py-2 rounded-md text-sm font-semibold ${
-                    view === v ? 'bg-white text-sky-600 shadow' : 'text-gray-600'
-                  }`}
+                  className={`px-5 py-2 rounded-md text-sm font-semibold ${view === v ? 'bg-white text-sky-600 shadow' : 'text-gray-600'
+                    }`}
                 >
                   {v === 'day' ? 'Hari' : v === 'week' ? 'Minggu' : 'Bulan'}
                 </button>
@@ -178,9 +177,8 @@ export default function SchedulePage() {
                 <div
                   key={i}
                   onClick={() => d && (setSelectedDate(d), setView('day'))}
-                  className={`min-h-28 border p-2 ${
-                    d ? 'cursor-pointer hover:bg-gray-50' : 'bg-gray-50/50'
-                  }`}
+                  className={`min-h-28 border p-2 ${d ? 'cursor-pointer hover:bg-gray-50' : 'bg-gray-50/50'
+                    }`}
                 >
                   {d && (
                     <>
@@ -207,63 +205,63 @@ export default function SchedulePage() {
         )}
 
         {/* WEEK VIEW */}
-{view === 'week' && (
-  <div className="bg-white border rounded-lg flex-1 overflow-hidden">
-    {/* Week Header */}
-    <div className="grid grid-cols-8 border-b bg-gray-50">
-      <div className="w-20" />
-      {weekDates(currentDate).map((d, i) => (
-        <div
-          key={i}
-          className="py-3 text-center text-sm font-semibold border-l"
-        >
-          {hariPendek[d.getDay()]} <br />
-          <span className="text-xs font-normal">{d.getDate()}</span>
-        </div>
-      ))}
-    </div>
-
-    {/* Time Grid */}
-    <div className="relative overflow-y-auto h-full">
-      {timeSlots.map((t, i) => (
-        <div key={i} className="flex">
-          <div className="w-20 text-xs text-right px-3 py-4 bg-gray-50 border-r">
-            {t.txt}
-          </div>
-          {weekDates(currentDate).map((_, j) => (
-            <div key={j} className="flex-1 h-16 border-b border-l" />
-          ))}
-        </div>
-      ))}
-
-      {/* Events */}
-      <div className="absolute left-20 right-0 top-0 grid grid-cols-7">
-        {weekDates(currentDate).map((d, dayIndex) => (
-          <div key={dayIndex} className="relative">
-            {getEvents(d).map(e => {
-              const p = pos(e.startTime, e.endTime);
-              return (
+        {view === 'week' && (
+          <div className="bg-white border rounded-lg flex-1 overflow-hidden">
+            {/* Week Header */}
+            <div className="grid grid-cols-8 border-b bg-gray-50">
+              <div className="w-20" />
+              {weekDates(currentDate).map((d, i) => (
                 <div
-                  key={e.id}
-                  className="absolute left-1 right-1 rounded-lg p-2 text-xs"
-                  style={{
-                    top: p.top,
-                    height: p.height,
-                    background: `${e.color}15`,
-                    borderLeft: `4px solid ${e.color}`,
-                  }}
+                  key={i}
+                  className="py-3 text-center text-sm font-semibold border-l"
                 >
-                  <div className="font-semibold truncate">{e.title}</div>
-                  <div>{e.startTime} – {e.endTime}</div>
+                  {hariPendek[d.getDay()]} <br />
+                  <span className="text-xs font-normal">{d.getDate()}</span>
                 </div>
-              );
-            })}
+              ))}
+            </div>
+
+            {/* Time Grid */}
+            <div className="relative overflow-y-auto h-full">
+              {timeSlots.map((t, i) => (
+                <div key={i} className="flex">
+                  <div className="w-20 text-xs text-right px-3 py-4 bg-gray-50 border-r">
+                    {t.txt}
+                  </div>
+                  {weekDates(currentDate).map((_, j) => (
+                    <div key={j} className="flex-1 h-16 border-b border-l" />
+                  ))}
+                </div>
+              ))}
+
+              {/* Events */}
+              <div className="absolute left-20 right-0 top-0 grid grid-cols-7">
+                {weekDates(currentDate).map((d, dayIndex) => (
+                  <div key={dayIndex} className="relative">
+                    {getEvents(d).map(e => {
+                      const p = pos(e.startTime, e.endTime);
+                      return (
+                        <div
+                          key={e.id}
+                          className="absolute left-1 right-1 rounded-lg p-2 text-xs"
+                          style={{
+                            top: p.top,
+                            height: p.height,
+                            background: `${e.color}15`,
+                            borderLeft: `4px solid ${e.color}`,
+                          }}
+                        >
+                          <div className="font-semibold truncate">{e.title}</div>
+                          <div>{e.startTime} – {e.endTime}</div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ))}
+              </div>
+            </div>
           </div>
-        ))}
-      </div>
-    </div>
-  </div>
-)}
+        )}
 
 
         {/* DAY VIEW */}
