@@ -195,7 +195,7 @@ export default function Page() {
               md:rounded-3xl
               md:p-10
               md:max-w-[1200px]">
-                
+
           {/* WRAPPER CENTER DESKTOP */}
           <div className="flex-1 overflow-y-auto">
 
@@ -294,10 +294,10 @@ export default function Page() {
                           >
                             <div
                               className={`w-12 h-12 rounded-full border-2 flex items-center justify-center ${progress === item.key
-                                  ? item.color === "green"
-                                    ? "bg-green-500 border-green-500"
-                                    : "bg-red-500 border-red-500"
-                                  : "border-gray-400"
+                                ? item.color === "green"
+                                  ? "bg-green-500 border-green-500"
+                                  : "bg-red-500 border-red-500"
+                                : "border-gray-400"
                                 }`}
                             >
                               {progress === item.key && <span className="text-white text-lg">✓</span>}
@@ -353,8 +353,7 @@ function PopupSelect({ label, value, options, onSave, onClear, disabled = false 
       {/* FIELD */}
       <div
         onClick={() => !disabled && setOpen(true)}
-        className={`transition ${disabled ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer hover:scale-[1.01]'}`}
-      >
+        className={`${disabled ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer'}`}>
         <label className="text-sm font-semibold">
           {label} <span className="text-red-500">*</span>
         </label>
@@ -428,7 +427,7 @@ function SearchableAddSelect({ label, value, options, onSave }: any) {
       {/* FIELD */}
       <div
         onClick={() => setOpen(true)}
-        className="cursor-pointer hover:scale-[1.01] transition-transform duration-200"
+        className="cursor-pointer"
       >
         <label className="text-sm font-semibold">
           {label} <span className="text-red-500">*</span>

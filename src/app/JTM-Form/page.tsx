@@ -7,7 +7,7 @@ import bg from '@/app/assets/plnup3/bgnogradient.png'
 import plnKecil from '@/app/assets/plnup3/plnkecil.svg'
 import { useRouter } from 'next/navigation';
 
-const API_URL = 'https://script.googleusercontent.com/macros/echo?user_content_key=AehSKLji40CSU0p0TKSoXkVVA6Sgrk9IRFpjjbY1tZBc9yO5b59mn8sxoAUBX1-ScQdInPEG6A_Qa6U7qGvNC9y8xU-_5zilJ4ZRMlMC6tO7xAmWfpNSx8-wSVeBH7v1lrGSWe21Yq7wIeVHqZniWXCqkwfH9a-srjZIZltWej96O3aAm8RI9oio0l0ehRgsAXTITQAI-5Fuvr2gYs_Q5WB3eLjMaMStdFcWglXaiqoiW8zeQylGDx0xd2UPJdAz62p6SgYtDNNLB3jlW-3Hdr56RytVwDzH8mZJJhw0S11i&lib=M8srHN6l5HstLsVN5sHMzfliEca9t7RmR'
+const API_URL = "https://script.google.com/macros/s/AKfycbyCxXZWyPBCJsyuLZpeynkr6V5FGCsLZopQaUQTPRIMKA6vpXriueq26O1n-SrsK_ALfA/exec"
 
 type ProgressKey = "on" | "close"
 
@@ -35,6 +35,19 @@ export default function Page() {
             { key: "close", label: "Close Inspeksi", color: "red" },
         ]
 
+    const INITIAL_FORM = {
+        up3: 'UP3 MAKASSAR SELATAN',
+        ulp: '',
+        penyulang: '',
+        zona: '',
+        section: '',
+        panjangAset: '0',
+        kms: '0',
+        scheduleDate: '',
+        tujuan: '',
+        keterangan: '',
+    }
+
 
     const [form, setForm] = useState({
         up3: 'UP3 MAKASSAR SELATAN',
@@ -57,7 +70,7 @@ export default function Page() {
 
     // ================= FETCH DATA =================
     useEffect(() => {
-        fetch(API_URL)
+        fetch(API_URL + "?type=aset")
             .then(res => res.json())
             .then(data => {
                 setSheetData(data)
@@ -147,6 +160,64 @@ export default function Page() {
         form.tujuan &&
         form.keterangan &&
         progress !== null
+
+    // ================= SUBMIT KE SCHEDULE JTM =================
+
+    const formatDateID = (value: string) => {
+        if (!value) return ""
+        const [y, m, d] = value.split("-")
+        return `${d}/${m}/${y}`
+    }
+
+
+    const handleSubmit = async () => {
+        try {
+            const isOn = progress === "on"
+
+            const payload = {
+                up3: form.up3,
+                ulp: form.ulp,
+                penyulang: form.penyulang,
+                zona: form.zona,
+                section: form.section,
+                kms_aset: Number(form.panjangAset),
+                kms_inspeksi: Number(form.kms),
+                start_date: formatDateID(form.scheduleDate),
+                end_date: form.tujuan,
+                progress: isOn ? "On Schedule" : "Close Inspeksi",
+                colour: isOn ? "Green" : "Blue",
+                potensi: "",
+                keterangan: form.keterangan || "",
+                ket_drone: "",
+            }
+
+            const formBody = new URLSearchParams(payload as any).toString()
+
+            const res = await fetch(API_URL, {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/x-www-form-urlencoded",
+                },
+                body: formBody,
+            })
+
+            const text = await res.text()
+            console.log("RAW RESPONSE:", text)
+
+            const result = JSON.parse(text)
+            if (result.status !== "success") throw new Error("Gagal simpan")
+
+            alert("✅ Data berhasil disimpan!")
+
+            // 🔄 RESET FORM
+            setForm(INITIAL_FORM)
+            setProgress(null)
+
+        } catch (err) {
+            console.error(err)
+            alert("❌ Gagal menyimpan data")
+        }
+    }
 
     return (
         <div className="h-screen overflow-hidden font-poppins flex flex-col">
@@ -343,9 +414,11 @@ export default function Page() {
                                             </button>
                                             <button
                                                 disabled={!isValid}
+                                                onClick={handleSubmit}
                                                 className={`flex-1 py-3 rounded-full text-white ${isValid ? "bg-[#2FA6DE]" : "bg-gray-400 cursor-not-allowed"}`}>
                                                 Submit
                                             </button>
+
                                         </div>
 
                                     </div>
@@ -393,7 +466,7 @@ function PopupSelect({
             {/* FIELD */}
             <div
                 onClick={() => !disabled && setOpen(true)}
-                className={`transition ${disabled ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer hover:scale-[1.01]'}`}>
+                className={`${disabled ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer'}`}>
                 <label className="text-sm font-semibold">{label} <span className="text-red-500">*</span></label>
                 <div className="mt-2 px-5 py-3 border-2 border-[#2FA6DE] rounded-full flex justify-between items-center">
                     <span className={value ? '' : 'text-gray-400'}>{value || `Pilih ${label}`}</span>
