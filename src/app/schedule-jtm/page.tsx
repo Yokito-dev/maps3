@@ -25,31 +25,44 @@ export default function SchedulePage() {
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [view, setView] = useState<'day' | 'week' | 'month'>('month');
   const [events, setEvents] = useState<Event[]>([]);
+  const [loading, setLoading] = useState(true);
 
   /* ================= FETCH ================= */
   useEffect(() => {
-    fetch(API_URL + '?type=schedule')
-      .then(res => res.json())
-      .then(data => {
+    const fetchSchedule = async () => {
+      try {
+        setLoading(true);
+
+        const res = await fetch(API_URL + '?type=schedule');
+        const data = await res.json();
+
         const mapped = data
           .filter((d: any) => d.ulp)
           .map((d: any, i: number) => ({
             id: String(d.id || i),
             ulp: d.ulp,
             date: new Date(d.start_date),
-            color: i % 2 === 0 ? '#7dd3fc' : '#86efac', // biru muda & ijo muda
+            color: i % 2 === 0 ? '#7dd3fc' : '#86efac',
           }));
+
         setEvents(mapped);
-      });
+      } catch (err) {
+        console.error(err);
+      } finally {
+        setLoading(false); // ⬅️ PENTING
+      }
+    };
+
+    fetchSchedule();
   }, []);
 
   /* ================= CONST ================= */
   const bulan = [
-    'Januari','Februari','Maret','April','Mei','Juni',
-    'Juli','Agustus','September','Oktober','November','Desember'
+    'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
+    'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'
   ];
-  const hari = ['Minggu','Senin','Selasa','Rabu','Kamis','Jumat','Sabtu'];
-  const hariGrid = ['Min','Sen','Sel','Rab','Kam','Jum','Sab'];
+  const hari = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
+  const hariGrid = ['Min', 'Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab'];
 
   const baseDate = selectedDate || currentDate;
 
@@ -132,6 +145,18 @@ export default function SchedulePage() {
   };
 
   /* ================= RENDER ================= */
+
+  if (loading) {
+    return (
+      <div className="h-screen flex items-center justify-center bg-gray-50">
+        <div className="flex flex-col items-center gap-3">
+          <div className="w-12 h-12 border-4 border-cyan-400 border-t-transparent rounded-full animate-spin" />
+          <p className="text-sm text-gray-500">Memuat jadwal...</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="h-screen bg-gray-50 flex flex-col overflow-hidden">
 
@@ -155,13 +180,12 @@ export default function SchedulePage() {
 
       {/* VIEW SELECT */}
       <div className="px-4 pt-4 flex gap-2">
-        {['day','week','month'].map(v => (
+        {['day', 'week', 'month'].map(v => (
           <button
             key={v}
             onClick={() => setView(v as any)}
-            className={`px-4 py-2 rounded-lg text-sm font-semibold ${
-              view === v ? 'bg-white shadow text-sky-600' : 'text-gray-500'
-            }`}
+            className={`px-4 py-2 rounded-lg text-sm font-semibold ${view === v ? 'bg-white shadow text-sky-600' : 'text-gray-500'
+              }`}
           >
             {v === 'day' ? 'Hari' : v === 'week' ? 'Minggu' : 'Bulan'}
           </button>

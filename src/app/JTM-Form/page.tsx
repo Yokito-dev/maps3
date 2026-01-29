@@ -229,12 +229,12 @@ export default function Page() {
             <div className="fixed inset-0 -z-10 bg-gradient-to-t from-[#165F67]/70 via-[#67C2E9]/30 to-transparent backdrop-blur-sm" />
 
             {/* HEADER */}
-            <div className="px-4 pt-3 shrink-0">
-                <div className="bg-white rounded-full shadow-lg px-6 py-1 flex items-center gap-3">
-                    <button onClick={() => router.push('/menu')} className="w-11 h-11 rounded-full hover:bg-gray-200 flex items-center justify-center">
-                        <IoArrowBack size={24} />
+            <div className="px-4 pt-3">
+                <div className="bg-white rounded-full shadow px-6 py-2 flex items-center gap-3">
+                    <button onClick={() => router.push('/menu')}>
+                        <IoArrowBack size={22} />
                     </button>
-                    <Image src={plnKecil} alt="pln" width={36} height={36} />
+                    <Image src={plnKecil} alt="pln" width={34} />
                     <h1 className="font-medium">Schedule JTM Form</h1>
                 </div>
             </div>
@@ -258,12 +258,16 @@ export default function Page() {
 
                         {/* ===== LOADING CONDITIONAL ===== */}
                         {loading ? (
-                            <div className="h-full flex items-center justify-center">
-                                <p className="text-gray-500 text-lg font-medium">
-                                    Loading...
-                                </p>
+                            <div className="flex h-full w-full items-center justify-center">
+                                <div className="flex flex-col items-center gap-3">
+                                    <div className="w-10 h-10 border-4 border-[#2FA6DE] border-t-transparent rounded-full animate-spin" />
+                                    <p className="text-gray-500 text-sm font-medium">
+                                        Memuat data...
+                                    </p>
+                                </div>
                             </div>
                         ) : (
+
                             /* ===== FORM GRID ===== */
                             <div className="min-h-full md:flex md:items-center">
                                 <div className="grid w-full grid-cols-1 md:grid-cols-2 gap-x-10 gap-y-8">
