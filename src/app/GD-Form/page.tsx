@@ -9,6 +9,8 @@ import { useRouter } from 'next/navigation';
 
 
 const API_URL = 'https://script.google.com/macros/s/AKfycbyPt-IwJu-2yloVyWPBf4Jm4i8O_5zGhsC2fQauuYUXupMGfmlWi3gBHZKHFzQFnQaT/exec'
+const SUBMIT_API_URL = 'https://script.google.com/macros/s/AKfycbwU8XUlnL6BLPw1RekuZT9NsUltUrpPRKUnZT9q4biGQ7wxN91uw8Ei58dvX1D0M0c3uw/exec'
+
 
 type AsetGD = {
   up3: string
@@ -68,16 +70,20 @@ export default function Page() {
     fasa: '0',
   })
 
-  // ================= FETCH =================
-  useEffect(() => {
-    fetch(API_URL)
-      .then(res => res.json())
-      .then(res => {
-        setData(res)
-        setLoading(false)
-      })
-      .catch(() => setLoading(false))
-  }, [])
+ // ================= FETCH =================
+useEffect(() => {
+  setLoading(true);
+
+  fetch(API_URL)
+    .then(res => res.json())
+    .then(json => {
+      setData(json.data ?? []);
+    })
+    .catch(err => console.error(err))
+    .finally(() => {
+      setLoading(false); // 🔴 INI YANG HILANG
+    });
+}, []);
 
   // ✅ UP3 AUTO TERISI SEJAK AWAL
   useEffect(() => {
@@ -155,13 +161,53 @@ export default function Page() {
     progress !== null
 
   const handleSubmit = async () => {
-    const payload = { ...form, progress }
-    await fetch(API_URL, {
+  try {
+    const payload = {
+      up3: form.up3,
+      ulp: form.ulp,
+      penyulang: form.penyulang,
+      zona: form.zona,
+      section: form.section,
+      nama_gardu: form.namaGardu,
+      longlat: form.longlat,
+      kapasitas: Number(form.kapasitas),
+      fasa: Number(form.fasa),
+      start_date: form.scheduleDate,
+      end_date: form.scheduleDate,
+      progress_gd: progress === 'open' ? 'OPEN INSPEKSI' : 'CLOSE INSPEKSI',
+    };
+
+    // Form-encode payload to avoid preflight CORS
+    const formBody = new URLSearchParams();
+    Object.entries(payload).forEach(([k, v]) => {
+      // convert null/undefined to empty string to avoid issues
+      formBody.append(k, v == null ? "" : String(v));
+    });
+
+    const res = await fetch(SUBMIT_API_URL, {
       method: 'POST',
-      body: JSON.stringify(payload),
-    })
-    alert('Data berhasil dikirim!')
+      headers: {
+        // use form-urlencoded so browser typically won't send preflight OPTIONS
+        'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8'
+      },
+      body: formBody.toString(),
+    });
+
+    const result = await res.json();
+
+    if (!result.success) {
+      throw new Error(result.message || 'Submit failed');
+    }
+
+    alert('Data berhasil masuk Schedule GD');
+    router.push('/schedule-gd');
+  } catch (err) {
+    console.error(err);
+    alert('Gagal mengirim data: ' + (err.message || err));
   }
+};
+
+
 
   return (
     <div className="h-screen overflow-hidden font-poppins flex flex-col">
@@ -195,7 +241,7 @@ export default function Page() {
               md:rounded-3xl
               md:p-10
               md:max-w-[1200px]">
-
+                
           {/* WRAPPER CENTER DESKTOP */}
           <div className="flex-1 overflow-y-auto">
 
@@ -294,10 +340,10 @@ export default function Page() {
                           >
                             <div
                               className={`w-12 h-12 rounded-full border-2 flex items-center justify-center ${progress === item.key
-                                ? item.color === "green"
-                                  ? "bg-green-500 border-green-500"
-                                  : "bg-red-500 border-red-500"
-                                : "border-gray-400"
+                                  ? item.color === "green"
+                                    ? "bg-green-500 border-green-500"
+                                    : "bg-red-500 border-red-500"
+                                  : "border-gray-400"
                                 }`}
                             >
                               {progress === item.key && <span className="text-white text-lg">✓</span>}
@@ -314,12 +360,15 @@ export default function Page() {
                         Cancel
                       </button>
                       <button
-                        disabled={!isValid}
-                        className={`flex-1 py-3 rounded-full text-white ${isValid ? "bg-[#2FA6DE]" : "bg-gray-400 cursor-not-allowed"
-                          }`}
-                      >
-                        Submit
-                      </button>
+  onClick={handleSubmit}
+  disabled={!isValid}
+  className={`flex-1 py-3 rounded-full text-white ${
+    isValid ? "bg-[#2FA6DE]" : "bg-gray-400 cursor-not-allowed"
+  }`}
+>
+  Submit
+</button>
+
                     </div>
                   </div>
 
@@ -353,7 +402,8 @@ function PopupSelect({ label, value, options, onSave, onClear, disabled = false 
       {/* FIELD */}
       <div
         onClick={() => !disabled && setOpen(true)}
-        className={`${disabled ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer'}`}>
+        className={`transition ${disabled ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer hover:scale-[1.01]'}`}
+      >
         <label className="text-sm font-semibold">
           {label} <span className="text-red-500">*</span>
         </label>
@@ -427,7 +477,7 @@ function SearchableAddSelect({ label, value, options, onSave }: any) {
       {/* FIELD */}
       <div
         onClick={() => setOpen(true)}
-        className="cursor-pointer"
+        className="cursor-pointer hover:scale-[1.01] transition-transform duration-200"
       >
         <label className="text-sm font-semibold">
           {label} <span className="text-red-500">*</span>
@@ -517,4 +567,3 @@ function Input({ label, value, type = 'text', onChange, readOnly = false, placeh
     </div>
   )
 }
-
