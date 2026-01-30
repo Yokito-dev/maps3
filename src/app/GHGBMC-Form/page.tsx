@@ -8,7 +8,9 @@ import plnKecil from '@/app/assets/plnup3/plnkecil.svg'
 import { useRouter } from 'next/navigation'
 
 const API_URL =
-  'https://script.google.com/macros/s/AKfycbyeZGyvtK9fzLEMXpjJPVRiRGFC8_9G6TVl9P8oA4-fAQoZlSG6HY5EnHFvatbFgEuQDA/exec'
+'https://script.google.com/macros/s/AKfycbwWaaqmQFyK6dZwaNIhbnUQJQ4QIEpgVsjgWEIaP3E_AumQ0e5O-Sk-s3qCg_JrjDKv9A/exec'
+  // 'https://script.google.com/macros/s/AKfycbzp4aX1c5Kh9ME0Um742ENBJVkCYMkNtO-9XIfXG1tcCSZlBPfr1D5EaxVgGsNB-8rx/exec'
+//'https://script.google.com/macros/s/AKfycbyeZGyvtK9fzLEMXpjJPVRiRGFC8_9G6TVl9P8oA4-fAQoZlSG6HY5EnHFvatbFgEuQDA/exec'
 
 type Row = {
   up3: string
@@ -29,6 +31,38 @@ export default function Page() {
     scheduleDate: '',
     statusMilik: '',
   })
+
+  const handleSubmit = async () => {
+    const payload = {
+      up3: form.up3,
+      ulp: form.ulp,
+      namaGardu: form.namaGardu,
+      startDate: form.scheduleDate,
+      endDate: form.scheduleDate,
+      progress: progress === 'open' ? 'OPEN INSPEKSI' : 'CLOSE INSPEKSI',
+      colour: progress === 'open' ? 'Green' : 'Red',
+      statusMilik: form.statusMilik,
+    }
+
+    try {
+      await fetch(API_URL, {
+        method: 'POST',
+        mode: 'no-cors',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload),
+      })
+
+      alert('Schedule berhasil disimpan')
+      router.push('/menu')
+
+    } catch (err) {
+      console.error(err)
+      alert('Koneksi ke Spreadsheet gagal')
+    }
+  }
+
 
   const change = (k: keyof typeof form, v: string) =>
     setForm(p => ({ ...p, [k]: v }))
@@ -55,12 +89,20 @@ export default function Page() {
 
   const GARDU_BY_ULP = useMemo(() => {
     const m: Record<string, string[]> = {}
+
     data.forEach(d => {
+      if (!d.ulp || !d.nama_gardu) return // ⬅️ TAMBAHAN PENTING
+
       if (!m[d.ulp]) m[d.ulp] = []
-      if (!m[d.ulp].includes(d.nama_gardu)) m[d.ulp].push(d.nama_gardu)
+
+      if (!m[d.ulp].includes(d.nama_gardu)) {
+        m[d.ulp].push(d.nama_gardu)
+      }
     })
+
     return m
   }, [data])
+
 
   const isFormValid =
     form.ulp &&
@@ -216,6 +258,7 @@ export default function Page() {
 
                         <button
                           disabled={!isFormValid}
+                          onClick={handleSubmit}
                           className={`flex-1 py-3 rounded-full text-white ${isFormValid
                             ? 'bg-[#2FA6DE]'
                             : 'bg-gray-400 cursor-not-allowed'
@@ -223,6 +266,7 @@ export default function Page() {
                         >
                           Submit
                         </button>
+
                       </div>
 
                     </div>

@@ -7,6 +7,8 @@ import { useRouter } from 'next/navigation';
 import { IoArrowBack } from 'react-icons/io5';
 import plnKecil from '@/app/assets/plnup3/plnkecil.svg';
 import { useSchedule } from '@/app/context/ScheduleContext';
+import Link from 'next/link';
+
 
 /* ================= TYPES ================= */
 
@@ -308,10 +310,13 @@ export default function SchedulePage() {
         )}
       </div>
 
-      {/* ADD */}
-      <button className="fixed bottom-8 right-8 w-14 h-14 bg-teal-500 text-white rounded-full shadow-lg flex items-center justify-center">
-        <Plus size={26} />
-      </button>
+{/* ADD */}
+<Link href="/GHGBMC-Form">
+  <button className="fixed bottom-8 right-8 w-14 h-14 bg-teal-500 text-white rounded-full shadow-lg flex items-center justify-center">
+    <Plus size={26} />
+  </button>
+</Link>
+
     </div>
   );
 }
