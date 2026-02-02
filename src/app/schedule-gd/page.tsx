@@ -40,7 +40,7 @@ const sameDay = (a: Date, b: Date) =>
 
 /* ================= API ================= */
 const API_URL =
-  'https://script.google.com/macros/s/AKfycbwU8XUlnL6BLPw1RekuZT9NsUltUrpPRKUnZT9q4biGQ7wxN91uw8Ei58dvX1D0M0c3uw/exec';
+  'https://script.google.com/macros/s/AKfycbzl9OlelZzrs8Skqa4mS87lihTHbEWAqB6ThbSZYfEkcjEn-18_Rs5JZ01vugFdGFQoBA/exec';
 
 export default function SchedulePage() {
   const router = useRouter();
@@ -50,9 +50,11 @@ export default function SchedulePage() {
   const [view, setView] = useState<'day' | 'week' | 'month'>('month');
   const [events, setEvents] = useState<Event[]>([]);
 
+  
   /* ================= FETCH ================= */
-  useEffect(() => {
-  fetch(API_URL, {
+useEffect(() => {
+  // request schedule (pastikan endpoint webapp sudah dideploy dan accessible)
+  fetch(`${API_URL}?type=schedule`, {
     method: "GET",
     cache: "no-store",
   })
@@ -63,32 +65,55 @@ export default function SchedulePage() {
     .then(json => {
       const data = json.data || [];
 
-      const mapped = data.map((d: any) => ({
-        id: String(d.id),
-        up3: d.up3,
-        ulp: d.ulp,
-        penyulang: d.penyulang,
-        zona_proteksi: d.zona_proteksi,
-        section: d.section,
-        nama_gardu: d.nama_gardu,
-        longlat: d.longlat,
-        kapasitas: d.kapasitas,
-        fasa: d.fasa,
-        start_date: new Date(d.start_date),
-        end_date: d.end_date ? new Date(d.end_date) : null,
-        progress: d.progress,
-        color:
-          d.progress === "SELESAI" ? "#86efac" :
-          d.progress === "PROSES"  ? "#fde047" :
-          "#7dd3fc",
-      }));
+      const mapped = data.map((d: any, idx: number) => {
+        // gunakan kolom 'colour' dari sheet jika ada (nilai string 'Red'/'Green' atau hex).
+        let colorFromSheet = (d.colour || d.color || "").toString().trim();
+
+        // normalize common words to hex
+        const sheetColorHex =
+          /red/i.test(colorFromSheet) ? "#f87171" :
+          /green/i.test(colorFromSheet) ? "#86efac" :
+          /^#([0-9a-f]{3}|[0-9a-f]{6})/i.test(colorFromSheet) ? colorFromSheet :
+          "";
+
+        // fallback berdasarkan progress text
+        const progressText = (d.progress || "").toString().toUpperCase();
+
+        const fallbackHex =
+          /SELESAI|CLOSE|CLOSE INSPEKSI/i.test(progressText) ? "#fca5a5" :
+          /PROSES/i.test(progressText) ? "#fde047" :
+          /OPEN|OPEN INSPEKSI/i.test(progressText) ? "#86efac" :
+          "#7dd3fc";
+
+        const color = sheetColorHex || fallbackHex;
+
+        return {
+          id: String(d.id ?? idx + 1),
+          up3: d.up3 ?? "",
+          ulp: d.ulp ?? "",
+          penyulang: d.penyulang ?? "",
+          zona_proteksi: d.zona ?? d.zona_proteksi ?? "",
+          section: d.section ?? "",
+          nama_gardu: d.nama_gardu ?? d.namaGardu ?? "",
+          longlat: d.longlat ?? "",
+          kapasitas: d.kapasitas ?? "",
+          fasa: d.fasa ?? "",
+          start_date: d.start_date ? normalizeDate(d.start_date) : new Date(),
+          end_date: d.end_date ? normalizeDate(d.end_date) : null,
+          progress: d.progress ?? d.progress_gd ?? "",
+          color,
+        } as Event;
+      });
 
       setEvents(mapped);
     })
     .catch(err => {
       console.error("FETCH FAILED:", err);
+      setEvents([]);
     });
 }, []);
+
+
 
 
   /* ================= CONST ================= */
@@ -308,9 +333,14 @@ export default function SchedulePage() {
       )}
 
       {/* FAB */}
-      <button className="fixed bottom-8 right-8 w-14 h-14 bg-cyan-400 text-white rounded-full shadow flex items-center justify-center">
-        <Plus size={26} />
-      </button>
+      <button
+  onClick={() => router.push('/GD-Form')}
+  aria-label="Open GD Form"
+  className="fixed bottom-8 right-8 w-14 h-14 bg-cyan-400 text-white rounded-full shadow flex items-center justify-center"
+>
+  <Plus size={26} />
+</button>
+
     </div>
   );
 }

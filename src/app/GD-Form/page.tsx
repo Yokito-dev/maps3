@@ -8,8 +8,7 @@ import plnKecil from '@/app/assets/plnup3/plnkecil.svg'
 import { useRouter } from 'next/navigation';
 
 
-const API_URL = 'https://script.google.com/macros/s/AKfycbyPt-IwJu-2yloVyWPBf4Jm4i8O_5zGhsC2fQauuYUXupMGfmlWi3gBHZKHFzQFnQaT/exec'
-const SUBMIT_API_URL = 'https://script.google.com/macros/s/AKfycbwU8XUlnL6BLPw1RekuZT9NsUltUrpPRKUnZT9q4biGQ7wxN91uw8Ei58dvX1D0M0c3uw/exec'
+const API_URL = 'https://script.google.com/macros/s/AKfycbzl9OlelZzrs8Skqa4mS87lihTHbEWAqB6ThbSZYfEkcjEn-18_Rs5JZ01vugFdGFQoBA/exec'
 
 
 type AsetGD = {
@@ -43,7 +42,10 @@ export default function Page() {
   const router = useRouter();
   const [data, setData] = useState<AsetGD[]>([])
   const [loading, setLoading] = useState(true)
+  const [submitting, setSubmitting] = useState(false);
+
   const [progress, setProgress] = useState<'open' | 'close' | null>(null)
+  
 
   type ProgressKey = 'open' | 'close'
 
@@ -74,16 +76,19 @@ export default function Page() {
 useEffect(() => {
   setLoading(true);
 
-  fetch(API_URL)
+  fetch(`${API_URL}?type=aset`)
     .then(res => res.json())
     .then(json => {
+      // json sekarang akan punya shape { data: [...] }
       setData(json.data ?? []);
     })
-    .catch(err => console.error(err))
-    .finally(() => {
-      setLoading(false); // 🔴 INI YANG HILANG
-    });
+    .catch(err => {
+      console.error('Fetch error', err);
+      setData([]);
+    })
+    .finally(() => setLoading(false));
 }, []);
+
 
   // ✅ UP3 AUTO TERISI SEJAK AWAL
   useEffect(() => {
@@ -160,7 +165,27 @@ useEffect(() => {
     form.scheduleDate &&
     progress !== null
 
-  const handleSubmit = async () => {
+  // add this helper near the top of your component (below useState declarations)
+const resetForm = () => {
+  setForm({
+    up3: data[0]?.up3 || 'UP3 MAKASSAR SELATAN',
+    ulp: '',
+    namaGardu: '',
+    scheduleDate: '',
+    penyulang: '',
+    zona: '',
+    section: '',
+    longlat: '',
+    kapasitas: '0',
+    fasa: '0',
+  });
+  setProgress(null);
+};
+
+const handleSubmit = async () => {
+  if (submitting) return; // ⛔ cegah klik ganda
+  setSubmitting(true);
+
   try {
     const payload = {
       up3: form.up3,
@@ -174,38 +199,44 @@ useEffect(() => {
       fasa: Number(form.fasa),
       start_date: form.scheduleDate,
       end_date: form.scheduleDate,
-      progress_gd: progress === 'open' ? 'OPEN INSPEKSI' : 'CLOSE INSPEKSI',
+      colour: progress === 'open' ? 'Green' : 'Red',
+      progress_gd: progress === 'open'
+        ? 'OPEN INSPEKSI'
+        : 'CLOSE INSPEKSI',
     };
 
-    // Form-encode payload to avoid preflight CORS
     const formBody = new URLSearchParams();
     Object.entries(payload).forEach(([k, v]) => {
-      // convert null/undefined to empty string to avoid issues
       formBody.append(k, v == null ? "" : String(v));
     });
 
-    const res = await fetch(SUBMIT_API_URL, {
+    const res = await fetch(API_URL, {
       method: 'POST',
       headers: {
-        // use form-urlencoded so browser typically won't send preflight OPTIONS
-        'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8'
+        'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8',
       },
       body: formBody.toString(),
     });
 
     const result = await res.json();
-
-    if (!result.success) {
-      throw new Error(result.message || 'Submit failed');
-    }
+    if (!result.success) throw new Error(result.message);
 
     alert('Data berhasil masuk Schedule GD');
-    router.push('/schedule-gd');
-  } catch (err) {
+
+    resetForm();
+
+    // ✅ tandai schedule perlu refresh
+    localStorage.setItem('refreshScheduleGD', '1');
+
+  } catch (err: any) {
+    alert('Gagal mengirim data');
     console.error(err);
-    alert('Gagal mengirim data: ' + (err.message || err));
+  } finally {
+    setSubmitting(false);
   }
 };
+
+
 
 
 
@@ -221,7 +252,7 @@ useEffect(() => {
       {/* HEADER */}
       <div className="px-4 pt-3 shrink-0">
         <div className="bg-white rounded-full shadow-lg px-6 py-1 flex items-center gap-3">
-          <button onClick={() => router.push('/menu')} className="w-11 h-11 rounded-full hover:bg-gray-200 flex items-center justify-center">
+          <button onClick={() => router.push('/schedule-gd')} className="w-11 h-11 rounded-full hover:bg-gray-200 flex items-center justify-center">
             <IoArrowBack size={24} />
           </button>
           <Image src={plnKecil} alt="pln" width={36} height={36} />
@@ -312,7 +343,15 @@ useEffect(() => {
 
                   {/* ================= KANAN ================= */}
                   <div className="flex flex-col gap-6">
-                    <Input label="Longlat" value={form.longlat} readOnly placeholder="Belum terisi" />
+                    <Input
+  label="Longlat"
+  value={form.longlat}
+  placeholder="Isi longlat"
+  onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+    setForm(p => ({ ...p, longlat: e.target.value }))
+  }
+/>
+
                     <Input label="Kapasitas" value={form.kapasitas} readOnly placeholder="Belum terisi" />
                     <Input label="Fasa" value={form.fasa} readOnly placeholder="Belum terisi" />
 
@@ -356,18 +395,21 @@ useEffect(() => {
 
                     {/* ACTION */}
                     <div className="flex gap-4 mt-8 items-end">
-                      <button className="flex-1 py-3 bg-red-500 text-white rounded-full">
+                      <button onClick={() => router.push('/schedule-gd')} className="flex-1 py-3 bg-red-500 text-white rounded-full">
                         Cancel
                       </button>
                       <button
   onClick={handleSubmit}
-  disabled={!isValid}
-  className={`flex-1 py-3 rounded-full text-white ${
-    isValid ? "bg-[#2FA6DE]" : "bg-gray-400 cursor-not-allowed"
+  disabled={!isValid || submitting}
+  className={`flex-1 py-3 rounded-full text-white transition ${
+    !isValid || submitting
+      ? "bg-gray-400 cursor-not-allowed"
+      : "bg-[#2FA6DE]"
   }`}
 >
-  Submit
+  {submitting ? "Mengirim..." : "Submit"}
 </button>
+
 
                     </div>
                   </div>
