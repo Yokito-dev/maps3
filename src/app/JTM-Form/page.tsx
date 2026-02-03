@@ -183,7 +183,7 @@ export default function Page() {
                 kms_aset: Number(form.panjangAset),
                 kms_inspeksi: Number(form.kms),
                 start_date: formatDateID(form.scheduleDate),
-                end_date: form.tujuan,
+                tujuan_penjadwalan: form.tujuan,
                 progress: isOn ? "On Schedule" : "Close Inspeksi",
                 colour: isOn ? "Green" : "Blue",
                 potensi: "",
@@ -327,18 +327,39 @@ export default function Page() {
                                     {/* KOLOM KANAN */}
                                     <div className="flex flex-col gap-6">
                                         {/* KMS */}
+                                        {/* KMS */}
                                         <div>
                                             <label className="text-sm font-semibold">
                                                 KMS Inspeksi <span className="text-red-500">*</span>
                                             </label>
+
                                             <div className="flex items-center gap-3 mt-2">
                                                 <input
+                                                    type="text"
+                                                    inputMode="numeric"
+                                                    pattern="[0-9]*"
                                                     value={form.kms}
-                                                    readOnly
+                                                    onChange={e => {
+                                                        const val = e.target.value.replace(/\D/g, '')
+                                                        handleChange("kms", val)
+                                                    }}
                                                     className="flex-1 py-3 px-5 border-2 border-[#2FA6DE] rounded-full"
                                                 />
-                                                <button onClick={() => changeKms(-1)} className="w-12 h-12 border rounded-full text-xl">−</button>
-                                                <button onClick={() => changeKms(1)} className="w-12 h-12 border rounded-full text-xl">+</button>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => changeKms(-1)}
+                                                    className="w-12 h-12 border rounded-full text-xl"
+                                                >
+                                                    −
+                                                </button>
+
+                                                <button
+                                                    type="button"
+                                                    onClick={() => changeKms(1)}
+                                                    className="w-12 h-12 border rounded-full text-xl"
+                                                >
+                                                    +
+                                                </button>
                                             </div>
                                         </div>
 

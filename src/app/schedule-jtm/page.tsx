@@ -217,7 +217,8 @@ export default function SchedulePage() {
                         {show.map(e => (
                           <div
                             key={e.id}
-                            className="text-[11px] px-2 py-1 rounded mb-1"
+                            onClick={() => router.push(`/schedule-jtm/${e.id}`)}
+                            className="text-[11px] px-2 py-1 rounded mb-1 cursor-pointer hover:opacity-80"
                             style={{ backgroundColor: e.color }}
                           >
                             {e.ulp}
@@ -257,7 +258,8 @@ export default function SchedulePage() {
                 {getEvents(d).map(e => (
                   <div
                     key={e.id}
-                    className="p-2 rounded"
+                    onClick={() => router.push(`/schedule-jtm/${e.id}`)}
+                    className="p-2 rounded cursor-pointer hover:opacity-80"
                     style={{ backgroundColor: e.color }}
                   >
                     {e.ulp}
@@ -275,7 +277,8 @@ export default function SchedulePage() {
           {getEvents(baseDate).map(e => (
             <div
               key={e.id}
-              className="p-3 mb-2 rounded"
+              onClick={() => router.push(`/schedule-jtm/${e.id}`)}
+              className="p-3 mb-2 rounded cursor-pointer hover:opacity-80"
               style={{ backgroundColor: e.color }}
             >
               {e.ulp}
