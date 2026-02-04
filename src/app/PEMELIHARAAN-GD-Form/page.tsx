@@ -62,108 +62,118 @@ export default function Page() {
     fotoLampiranBA
 
   return (
-    <div className="h-screen flex flex-col font-poppins overflow-hidden">
+    <div className="h-screen overflow-hidden font-poppins flex flex-col">
 
       {/* BACKGROUND */}
       <div className="fixed inset-0 -z-10">
-        <Image src={bg} alt="bg" fill className="object-cover" priority />
+        <Image src={bg} alt="Background" fill className="object-cover" priority />
       </div>
       <div className="fixed inset-0 -z-10 bg-gradient-to-t from-[#165F67]/70 via-[#67C2E9]/30 to-transparent backdrop-blur-sm" />
 
       {/* HEADER */}
-      <div className="px-4 pt-3 shrink-0">
-        <div className="bg-white rounded-full shadow-lg px-6 py-1 flex items-center gap-3">
-          <button
-            onClick={() => router.push('/menu')}
-            className="w-11 h-11 rounded-full hover:bg-gray-200 flex items-center justify-center"
-          >
-            <IoArrowBack size={24} />
+      <div className="px-4 pt-3">
+        <div className="bg-white rounded-full shadow px-6 py-2 flex items-center gap-3">
+          <button onClick={() => router.push('/menu')}>
+            <IoArrowBack size={22} />
           </button>
-          <Image src={plnKecil} alt="pln" width={36} height={36} />
-          <h1 className="font-medium">Pemeliharaan Gardu Form</h1>
+          <Image src={plnKecil} alt="pln" width={34} />
+          <h1 className="font-medium">Pemeliharaan GD Form</h1>
         </div>
       </div>
 
       {/* CONTENT */}
       <main className="flex-1 flex justify-center items-start px-0 pt-4 md:p-4 overflow-hidden">
-        <div className="bg-white shadow-xl w-full flex flex-col h-full overflow-hidden rounded-t-[28px] md:rounded-3xl px-5 py-6 md:p-10 md:max-w-[1200px]">
+
+        <div
+          className="
+                    bg-white shadow-xl w-full
+                    flex flex-col h-full overflow-hidden
+                    rounded-t-[28px] rounded-b-none
+                    px-5 py-6
+                    md:h-[82vh]
+                    md:rounded-3xl
+                    md:p-10
+                    md:max-w-[1200px]">
 
           <div className="flex-1 overflow-y-auto">
 
             {/* FORM */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-x-10 gap-y-8">
+            <div className="grid w-full grid-cols-1 md:grid-cols-2 gap-x-10 gap-y-8">
 
-              <Input label="UP3" value={form.up3} readOnly />
+              {/* KOLOM KIRI */}
+              <div className="flex flex-col gap-6">
+                <Input label="UP3" value={form.up3} readOnly />
 
-              <PopupSelect
-                label="Pemeliharaan Yang Dilakukan"
-                value={form.pemeliharaan}
-                options={[
-                  'Pemeliharaan Preventif',
-                  'Pemeliharaan Korektif',
-                  'Inspeksi Rutin',
-                ]}
-                onSave={v => handleChange('pemeliharaan', v)}
-                onClear={() => handleChange('pemeliharaan', '')}
-              />
+                <PopupSelect
+                  label="Pemeliharaan Yang Dilakukan"
+                  value={form.pemeliharaan}
+                  options={[
+                    'Pemeliharaan Preventif',
+                    'Pemeliharaan Korektif',
+                    'Inspeksi Rutin',
+                  ]}
+                  onSave={v => handleChange('pemeliharaan', v)}
+                  onClear={() => handleChange('pemeliharaan', '')}
+                />
 
-              <PopupSelect
-                label="ULP"
-                value={form.ulp}
-                options={ULP_LIST}
-                onSave={v => handleChange('ulp', v)}
-                onClear={() => handleChange('ulp', '')}
-              />
+                <PopupSelect
+                  label="ULP"
+                  value={form.ulp}
+                  options={ULP_LIST}
+                  onSave={v => handleChange('ulp', v)}
+                  onClear={() => handleChange('ulp', '')}
+                />
 
-              <PopupSelect
-                label="Komponen"
-                value={form.komponen}
-                options={['Trafo', 'Panel', 'Cubicle', 'Relay']}
-                onSave={v => handleChange('komponen', v)}
-                onClear={() => handleChange('komponen', '')}
-              />
+                <PopupSelect
+                  label="Komponen"
+                  value={form.komponen}
+                  options={['Trafo', 'Panel', 'Cubicle', 'Relay']}
+                  onSave={v => handleChange('komponen', v)}
+                  onClear={() => handleChange('komponen', '')}
+                />
 
-              <Input
-                label="Tanggal HAR Gardu"
-                type="date"
-                value={form.tanggalHar}
-                onChange={(e: ChangeEvent<HTMLInputElement>) =>
-                  handleChange('tanggalHar', e.target.value)
-                }
-              />
+                <Input
+                  label="Tanggal HAR Gardu"
+                  type="date"
+                  value={form.tanggalHar}
+                  onChange={e => handleChange('tanggalHar', e.target.value)}
+                />
+              </div>
 
-              <Input
-                label="Keterangan"
-                value={form.keterangan}
-                onChange={(e: ChangeEvent<HTMLInputElement>) =>
-                  handleChange('keterangan', e.target.value)
-                }
-              />
+              {/* KOLOM KANAN */}
+              <div className="flex flex-col gap-6">
 
-              <PopupSelect
-                label="LONG / LAT"
-                value={form.longlat}
-                options={[
-                  '-5.147665, 119.432732',
-                  '-5.148210, 119.433120',
-                ]}
-                onSave={v => handleChange('longlat', v)}
-                onClear={() => handleChange('longlat', '')}
-              />
+                <Input
+                  label="Keterangan"
+                  value={form.keterangan}
+                  onChange={e => handleChange('keterangan', e.target.value)}
+                />
 
-              <PopupSelect
-                label="Alasan Gardu Dipelihara"
-                value={form.alasan}
-                options={['Gangguan', 'Usia Peralatan', 'Hasil Inspeksi']}
-                onSave={v => handleChange('alasan', v)}
-                onClear={() => handleChange('alasan', '')}
-              />
+                <PopupSelect
+                  label="LONG / LAT"
+                  value={form.longlat}
+                  options={[
+                    '-5.147665, 119.432732',
+                    '-5.148210, 119.433120',
+                  ]}
+                  onSave={v => handleChange('longlat', v)}
+                  onClear={() => handleChange('longlat', '')}
+                />
 
-              <NumberStepper
-                label="Jumlah Cell"
-                value={form.jumlahCell}
-                onChange={v => handleChange('jumlahCell', v)}
-              />
+                <PopupSelect
+                  label="Alasan Gardu Dipelihara"
+                  value={form.alasan}
+                  options={['Gangguan', 'Usia Peralatan', 'Hasil Inspeksi']}
+                  onSave={v => handleChange('alasan', v)}
+                  onClear={() => handleChange('alasan', '')}
+                />
+
+                <NumberStepper
+                  label="Jumlah Cell"
+                  value={form.jumlahCell}
+                  onChange={v => handleChange('jumlahCell', v)}
+                />
+              </div>
             </div>
 
             {/* FOTO */}
@@ -181,9 +191,8 @@ export default function Page() {
               </button>
               <button
                 disabled={!isFormValid}
-                className={`px-12 py-3 rounded-full text-white ${
-                  isFormValid ? 'bg-[#2FA6DE]' : 'bg-gray-400 cursor-not-allowed'
-                }`}
+                className={`px-12 py-3 rounded-full text-white ${isFormValid ? 'bg-[#2FA6DE]' : 'bg-gray-400 cursor-not-allowed'
+                  }`}
               >
                 Submit
               </button>

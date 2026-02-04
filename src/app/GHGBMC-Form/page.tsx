@@ -54,18 +54,17 @@ export default function Page() {
 
   const GARDU_BY_ULP = useMemo(() => {
     const m: Record<string, string[]> = {}
-
     data.forEach(d => {
+
       if (!d.ulp || !d.namaGardu) return
       if (!m[d.ulp]) m[d.ulp] = []
       if (!m[d.ulp].includes(d.namaGardu)) {
         m[d.ulp].push(d.namaGardu)
       }
-    })
 
+    })
     return m
   }, [data])
-
 
   const isFormValid =
     form.ulp &&
@@ -280,7 +279,6 @@ export default function Page() {
 
                         <button
                           disabled={!isFormValid}
-                          onClick={handleSubmit}
                           className={`flex-1 py-3 rounded-full text-white ${isFormValid
                             ? 'bg-[#2FA6DE]'
                             : 'bg-gray-400 cursor-not-allowed'
@@ -288,7 +286,6 @@ export default function Page() {
                         >
                           Submit
                         </button>
-
                       </div>
 
                     </div>

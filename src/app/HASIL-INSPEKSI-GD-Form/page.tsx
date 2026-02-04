@@ -32,7 +32,7 @@ export default function Page() {
   const [form, setForm] = useState({
     up3: 'UP3 MAKASSAR SELATAN',
     ulp: '',
-    tanggalInspeksi : '',
+    tanggalInspeksi: '',
     metode: '',
     isi: '',
     noReferensi: '',
@@ -43,9 +43,9 @@ export default function Page() {
     setForm(p => ({ ...p, [key]: val }))
   }
 
-  
+
   const isFormValid =
-    Object.values(form).every(v => v.trim() !== '') 
+    Object.values(form).every(v => v.trim() !== '')
 
   return (
     <div className="h-screen flex flex-col font-poppins overflow-hidden">
@@ -57,23 +57,31 @@ export default function Page() {
       <div className="fixed inset-0 -z-10 bg-gradient-to-t from-[#165F67]/70 via-[#67C2E9]/30 to-transparent backdrop-blur-sm" />
 
       {/* HEADER */}
-      <div className="px-4 pt-3 shrink-0">
-        <div className="bg-white rounded-full shadow-lg px-6 py-1 flex items-center gap-3">
-          <button
-            onClick={() => router.push('/menu')}
-            className="w-11 h-11 rounded-full hover:bg-gray-200 flex items-center justify-center"
-          >
-            <IoArrowBack size={24} />
+      <div className="px-4 pt-3">
+        <div className="bg-white rounded-full shadow px-6 py-2 flex items-center gap-3">
+          <button onClick={() => router.push('/menu')}>
+            <IoArrowBack size={22} />
           </button>
-          <Image src={plnKecil} alt="pln" width={36} height={36} />
+          <Image src={plnKecil} alt="pln" width={34} />
           <h1 className="font-medium">Hasil Inspeksi GD</h1>
         </div>
       </div>
 
       {/* CONTENT */}
       <main className="flex-1 flex justify-center items-start px-0 pt-4 md:p-4 overflow-hidden">
-        <div className="bg-white shadow-xl w-full flex flex-col h-full overflow-hidden rounded-t-[28px] md:rounded-3xl px-5 py-6 md:p-10 md:max-w-[1200px]">
 
+        <div
+          className="
+                    bg-white shadow-xl w-full
+                    flex flex-col h-full overflow-hidden
+                    rounded-t-[28px] rounded-b-none
+                    px-5 py-6
+                    md:h-[82vh]
+                    md:rounded-3xl
+                    md:p-10
+                    md:max-w-[1200px]">
+
+          {/* WRAPPER KHUSUS DESKTOP */}
           <div className="flex-1 overflow-y-auto">
 
             {/* FORM */}
@@ -118,7 +126,7 @@ export default function Page() {
                 }
               />
 
-             <Input
+              <Input
                 label="Nama Inspektor"
                 value={form.namaInspektor}
                 onChange={(e: ChangeEvent<HTMLInputElement>) =>
@@ -136,9 +144,8 @@ export default function Page() {
               </button>
               <button
                 disabled={!isFormValid}
-                className={`px-12 py-3 rounded-full text-white ${
-                  isFormValid ? 'bg-[#2FA6DE]' : 'bg-gray-400 cursor-not-allowed'
-                }`}
+                className={`px-12 py-3 rounded-full text-white ${isFormValid ? 'bg-[#2FA6DE]' : 'bg-gray-400 cursor-not-allowed'
+                  }`}
               >
                 Save
               </button>
