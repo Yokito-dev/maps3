@@ -278,6 +278,7 @@ export default function Page() {
                         </button>
 
                         <button
+                          onClick={handleSubmit}
                           disabled={!isFormValid}
                           className={`flex-1 py-3 rounded-full text-white ${isFormValid
                             ? 'bg-[#2FA6DE]'
@@ -286,6 +287,7 @@ export default function Page() {
                         >
                           Submit
                         </button>
+
                       </div>
 
                     </div>
