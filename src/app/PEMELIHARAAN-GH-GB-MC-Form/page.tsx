@@ -291,7 +291,11 @@ function PopupSelect({ label, value, options, onSave, onClear }: PopupSelectProp
     <>
       <div onClick={() => setOpen(true)} className="cursor-pointer">
         <label className="text-sm font-semibold">{label} <span className="text-red-500">*</span></label>
-        <div className="mt-2 px-5 py-3 border-2 border-[#2FA6DE] rounded-full flex justify-between">
+        <div className={`mt-2 px-5 py-3 rounded-full flex items-center justify-between border-2 transition
+        ${value
+              ? 'border-[#2FA6DE] bg-[#2FA6DE]/5'
+              : 'border-[#2FA6DE]'
+            } hover:bg-[#2FA6DE]/5`}>
           <span className={value ? '' : 'text-gray-400'}>
             {value || `Pilih ${label}`}
           </span>
@@ -310,15 +314,25 @@ function PopupSelect({ label, value, options, onSave, onClear }: PopupSelectProp
               className="mb-3 px-4 py-2 border rounded-lg"
             />
             <div className="overflow-y-auto flex-1">
-              {filtered.map(o => (
-                <div
-                  key={o}
-                  onClick={() => { onSave(o); setOpen(false); setSearch('') }}
-                  className="py-2 px-3 hover:bg-gray-100 cursor-pointer rounded-lg"
-                >
-                  {o}
-                </div>
-              ))}
+              {filtered.map(o => {
+                const selected = o === value
+
+                return (
+                  <div
+                    key={o}
+                    onClick={() => {
+                      onSave(o)
+                      setOpen(false)
+                      setSearch('')
+                    }}
+                    className={`py-2 px-3 rounded-lg cursor-pointer
+                      ${selected
+                        ? 'bg-[#E8F5FB]  text-blue-600 font-semibold'
+                        : 'hover:bg-gray-100'}`}>
+                    {o}
+                  </div>
+                )
+              })}     
             </div>
             <button onClick={() => { onClear(); setOpen(false); setSearch('') }} className="text-red-500 mt-3">
               Clear

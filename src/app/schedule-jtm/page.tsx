@@ -1,40 +1,46 @@
-'use client';
-import React, { useEffect, useState } from 'react';
-import { ChevronLeft, ChevronRight, Plus } from 'lucide-react';
-import Image from 'next/image';
-import { useRouter } from 'next/navigation';
-import { IoArrowBack } from 'react-icons/io5';
-import plnKecil from '@/app/assets/plnup3/plnkecil.svg';
+'use client'
+
+import React, { useEffect, useState } from 'react'
+import { ChevronLeft, ChevronRight, Plus } from 'lucide-react'
+import Image from 'next/image'
+import { useRouter } from 'next/navigation'
+import { IoArrowBack } from 'react-icons/io5'
+import plnKecil from '@/app/assets/plnup3/plnkecil.svg'
 
 /* ================= TYPE ================= */
 interface Event {
-  id: string;
-  ulp: string;
-  date: Date;
-  color: string;
+  id: string
+  ulp: string
+  date: Date
+  color: string
 }
 
 /* ================= API ================= */
 const API_URL =
-  'https://script.google.com/macros/s/AKfycbyCxXZWyPBCJsyuLZpeynkr6V5FGCsLZopQaUQTPRIMKA6vpXriueq26O1n-SrsK_ALfA/exec';
+  'https://script.google.com/macros/s/AKfycbyCxXZWyPBCJsyuLZpeynkr6V5FGCsLZopQaUQTPRIMKA6vpXriueq26O1n-SrsK_ALfA/exec'
 
 export default function SchedulePage() {
-  const router = useRouter();
+  const router = useRouter()
 
-  const [currentDate, setCurrentDate] = useState(new Date());
-  const [selectedDate, setSelectedDate] = useState<Date | null>(null);
-  const [view, setView] = useState<'day' | 'week' | 'month'>('month');
-  const [events, setEvents] = useState<Event[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [currentDate, setCurrentDate] = useState(new Date())
+  const [selectedDate, setSelectedDate] = useState<Date | null>(null)
+  const [view, setView] = useState<'day' | 'week' | 'month'>('month')
+  const [events, setEvents] = useState<Event[]>([])
+  const [loading, setLoading] = useState(true)
 
-  /* ================= FETCH ================= */
+  const [openDetailId, setOpenDetailId] = useState<string | null>(null)
+  const [currentIndex, setCurrentIndex] = useState<number>(-1)
+
+  const [detailData, setDetailData] = useState<any>(null)
+  const [openingDetail, setOpeningDetail] = useState(false)
+
   useEffect(() => {
     const fetchSchedule = async () => {
       try {
-        setLoading(true);
+        setLoading(true)
 
-        const res = await fetch(API_URL + '?type=schedule');
-        const data = await res.json();
+        const res = await fetch(API_URL + '?type=schedule')
+        const data = await res.json()
 
         const mapped = data
           .filter((d: any) => d.ulp)
@@ -43,108 +49,115 @@ export default function SchedulePage() {
             ulp: d.ulp,
             date: new Date(d.start_date),
             color: i % 2 === 0 ? '#7dd3fc' : '#86efac',
-          }));
+          }))
 
-        setEvents(mapped);
+        setEvents(mapped)
       } catch (err) {
-        console.error(err);
+        console.error(err)
       } finally {
-        setLoading(false); // ⬅️ PENTING
+        setLoading(false)
       }
-    };
+    }
 
-    fetchSchedule();
-  }, []);
+    fetchSchedule()
+  }, [])
 
-  /* ================= CONST ================= */
   const bulan = [
     'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
     'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'
-  ];
-  const hari = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
-  const hariGrid = ['Min', 'Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab'];
+  ]
 
-  const baseDate = selectedDate || currentDate;
+  const hari = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu']
+  const hariGrid = ['Min', 'Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab']
 
-  /* ================= UTILS ================= */
-  const sameDay = (a: Date, b: Date) =>
-    a.toDateString() === b.toDateString();
+  const baseDate = selectedDate || currentDate
 
-  const getEvents = (d: Date) =>
-    events.filter(e => sameDay(e.date, d));
+  const sameDay = (a: Date, b: Date) => a.toDateString() === b.toDateString()
+  const getEvents = (d: Date) => events.filter(e => sameDay(e.date, d))
 
-  /* ================= MONTH ================= */
   const getDaysInMonth = (d: Date) => {
-    const y = d.getFullYear();
-    const m = d.getMonth();
-    const first = new Date(y, m, 1).getDay();
-    const total = new Date(y, m + 1, 0).getDate();
+    const y = d.getFullYear()
+    const m = d.getMonth()
+    const first = new Date(y, m, 1).getDay()
+    const total = new Date(y, m + 1, 0).getDate()
     return [
       ...Array(first).fill(null),
       ...Array.from({ length: total }, (_, i) => new Date(y, m, i + 1)),
-    ];
-  };
+    ]
+  }
 
-  const days = getDaysInMonth(currentDate);
+  const days = getDaysInMonth(currentDate)
 
-  /* ================= WEEK ================= */
   const getWeekStart = (d: Date) => {
-    const x = new Date(d);
-    x.setDate(d.getDate() - d.getDay());
-    return x;
-  };
+    const x = new Date(d)
+    x.setDate(d.getDate() - d.getDay())
+    return x
+  }
 
   const weekDates = (d: Date) => {
-    const start = getWeekStart(d);
+    const start = getWeekStart(d)
     return Array.from({ length: 7 }, (_, i) => {
-      const x = new Date(start);
-      x.setDate(start.getDate() + i);
-      return x;
-    });
-  };
+      const x = new Date(start)
+      x.setDate(start.getDate() + i)
+      return x
+    })
+  }
 
-  const weeks = weekDates(baseDate);
+  const weeks = weekDates(baseDate)
 
-  /* ================= HEADER LABEL ================= */
   const headerLabel = () => {
     if (view === 'month') {
-      return `${bulan[currentDate.getMonth()]} ${currentDate.getFullYear()}`;
+      return `${bulan[currentDate.getMonth()]} ${currentDate.getFullYear()}`
     }
 
     if (view === 'week') {
-      const start = getWeekStart(baseDate);
-      const end = new Date(start);
-      end.setDate(start.getDate() + 6);
-      return `${hari[start.getDay()]}, ${start.getDate()} ${bulan[start.getMonth()]} – ${hari[end.getDay()]}, ${end.getDate()} ${bulan[end.getMonth()]} ${end.getFullYear()}`;
+      const start = getWeekStart(baseDate)
+      const end = new Date(start)
+      end.setDate(start.getDate() + 6)
+      return `${hari[start.getDay()]}, ${start.getDate()} ${bulan[start.getMonth()]} – ${hari[end.getDay()]}, ${end.getDate()} ${bulan[end.getMonth()]} ${end.getFullYear()}`
     }
 
-    return `${hari[baseDate.getDay()]}, ${baseDate.getDate()} ${bulan[baseDate.getMonth()]} ${baseDate.getFullYear()}`;
-  };
+    return `${hari[baseDate.getDay()]}, ${baseDate.getDate()} ${bulan[baseDate.getMonth()]} ${baseDate.getFullYear()}`
+  }
 
-  /* ================= NAVIGATION FIX 🔥 ================= */
   const movePrev = () => {
-    const d = new Date(baseDate);
-
-    if (view === 'month') d.setMonth(d.getMonth() - 1);
-    if (view === 'week') d.setDate(d.getDate() - 7);
-    if (view === 'day') d.setDate(d.getDate() - 1);
-
-    setCurrentDate(d);
-    setSelectedDate(d);
-  };
+    const d = new Date(baseDate)
+    if (view === 'month') d.setMonth(d.getMonth() - 1)
+    if (view === 'week') d.setDate(d.getDate() - 7)
+    if (view === 'day') d.setDate(d.getDate() - 1)
+    setCurrentDate(d)
+    setSelectedDate(d)
+  }
 
   const moveNext = () => {
-    const d = new Date(baseDate);
+    const d = new Date(baseDate)
+    if (view === 'month') d.setMonth(d.getMonth() + 1)
+    if (view === 'week') d.setDate(d.getDate() + 7)
+    if (view === 'day') d.setDate(d.getDate() + 1)
+    setCurrentDate(d)
+    setSelectedDate(d)
+  }
 
-    if (view === 'month') d.setMonth(d.getMonth() + 1);
-    if (view === 'week') d.setDate(d.getDate() + 7);
-    if (view === 'day') d.setDate(d.getDate() + 1);
+  const openDetail = async (id: string) => {
+    if (openingDetail) return
 
-    setCurrentDate(d);
-    setSelectedDate(d);
-  };
+    setOpeningDetail(true)
 
-  /* ================= RENDER ================= */
+    const idx = events.findIndex(x => String(x.id) === String(id))
+    setCurrentIndex(idx)
+
+    try {
+      const res = await fetch(API_URL + `?type=schedule_detail&id=${id}`)
+      const data = await res.json()
+
+      setDetailData(data)
+      setOpenDetailId(id)
+    } catch (e) {
+      console.error(e)
+    } finally {
+      setOpeningDetail(false)
+    }
+  }
 
   if (loading) {
     return (
@@ -154,11 +167,11 @@ export default function SchedulePage() {
           <p className="text-sm text-gray-500">Memuat jadwal...</p>
         </div>
       </div>
-    );
+    )
   }
 
   return (
-    <div className="h-screen bg-gray-50 flex flex-col overflow-hidden">
+    <div className="h-screen bg-gray-50 flex flex-col">
 
       {/* HEADER */}
       <div className="px-4 pt-3">
@@ -204,9 +217,9 @@ export default function SchedulePage() {
 
             <div className="grid grid-cols-7">
               {days.map((d, i) => {
-                const ev = d ? getEvents(d) : [];
-                const show = ev.slice(0, 2);
-                const more = ev.length - 2;
+                const ev = d ? getEvents(d) : []
+                const show = ev.slice(0, 2)
+                const more = ev.length - 2
 
                 return (
                   <div key={i} className="border min-h-[120px] p-2">
@@ -217,8 +230,9 @@ export default function SchedulePage() {
                         {show.map(e => (
                           <div
                             key={e.id}
-                            onClick={() => router.push(`/schedule-jtm/${e.id}`)}
-                            className="text-[11px] px-2 py-1 rounded mb-1 cursor-pointer hover:opacity-80"
+                            onClick={() => openDetail(e.id)}
+                            className={`text-[11px] px-2 py-1 rounded mb-1 cursor-pointer
+                              ${openingDetail ? 'opacity-50 pointer-events-none' : 'hover:opacity-80'}`}
                             style={{ backgroundColor: e.color }}
                           >
                             {e.ulp}
@@ -228,8 +242,8 @@ export default function SchedulePage() {
                         {more > 0 && (
                           <div
                             onClick={() => {
-                              setSelectedDate(d);
-                              setView('week');
+                              setSelectedDate(d)
+                              setView('week')
                             }}
                             className="text-xs text-sky-500 cursor-pointer"
                           >
@@ -239,7 +253,7 @@ export default function SchedulePage() {
                       </>
                     )}
                   </div>
-                );
+                )
               })}
             </div>
           </div>
@@ -258,8 +272,8 @@ export default function SchedulePage() {
                 {getEvents(d).map(e => (
                   <div
                     key={e.id}
-                    onClick={() => router.push(`/schedule-jtm/${e.id}`)}
-                    className="p-2 rounded cursor-pointer hover:opacity-80"
+                    onClick={() => openDetail(e.id)}
+                    className={`p-2 rounded cursor-pointer ${openingDetail ? 'opacity-50 pointer-events-none' : 'hover:opacity-80'}`}
                     style={{ backgroundColor: e.color }}
                   >
                     {e.ulp}
@@ -277,8 +291,8 @@ export default function SchedulePage() {
           {getEvents(baseDate).map(e => (
             <div
               key={e.id}
-              onClick={() => router.push(`/schedule-jtm/${e.id}`)}
-              className="p-3 mb-2 rounded cursor-pointer hover:opacity-80"
+              onClick={() => openDetail(e.id)}
+              className={`p-3 mb-2 rounded cursor-pointer ${openingDetail ? 'opacity-50 pointer-events-none' : 'hover:opacity-80'}`}
               style={{ backgroundColor: e.color }}
             >
               {e.ulp}
@@ -291,6 +305,168 @@ export default function SchedulePage() {
       <button className="fixed bottom-8 right-8 w-14 h-14 bg-cyan-400 text-white rounded-full shadow flex items-center justify-center">
         <Plus size={26} />
       </button>
+
+      {openDetailId && detailData && (
+        <ScheduleDetailOverlay
+          data={detailData}
+          onClose={() => {
+            setOpenDetailId(null)
+            setCurrentIndex(-1)
+            setDetailData(null)
+          }}
+          onPrev={async () => {
+            if (currentIndex > 0) {
+              const prev = events[currentIndex - 1]
+              const res = await fetch(API_URL + `?type=schedule_detail&id=${prev.id}`)
+              const data = await res.json()
+              setCurrentIndex(currentIndex - 1)
+              setDetailData(data)
+              setOpenDetailId(prev.id)
+            }
+          }}
+          onNext={async () => {
+            if (currentIndex < events.length - 1) {
+              const next = events[currentIndex + 1]
+              const res = await fetch(API_URL + `?type=schedule_detail&id=${next.id}`)
+              const data = await res.json()
+              setCurrentIndex(currentIndex + 1)
+              setDetailData(data)
+              setOpenDetailId(next.id)
+            }
+          }}
+          hasPrev={currentIndex > 0}
+          hasNext={currentIndex < events.length - 1}
+        />
+      )}
+
     </div>
-  );
+  )
+}
+
+/* ================= DETAIL OVERLAY ================= */
+
+function ScheduleDetailOverlay({
+  data,
+  onClose,
+  onPrev,
+  onNext,
+  hasPrev,
+  hasNext,
+}: any) {
+
+  const router = useRouter()
+
+  return (
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center">
+
+      <div
+        onClick={onClose}
+        className="absolute inset-0 bg-black/40 backdrop-blur-sm"
+      />
+
+      <div className="relative flex items-center justify-center w-full max-w-4xl mx-4">
+
+        <button
+          disabled={!hasPrev}
+          onClick={onPrev}
+          className={`absolute left-0 -translate-x-1/2 top-1/2 -translate-y-1/2
+          w-11 h-11 rounded-full bg-white shadow flex items-center justify-center
+          ${!hasPrev ? 'opacity-30 cursor-default' : 'hover:bg-gray-100'}`}
+        >
+          <ChevronLeft size={24} />
+        </button>
+
+        <div className="relative w-full max-w-2xl bg-white rounded-2xl shadow-xl max-h-[90vh] overflow-hidden">
+
+          <div className="flex items-center justify-between px-5 py-4 border-b">
+            <div className="font-semibold">Detail Schedule</div>
+
+            <button
+              onClick={onClose}
+              className="px-2 text-gray-500 hover:text-black"
+            >
+              ✕
+            </button>
+          </div>
+
+          <div className="px-6 py-4 overflow-y-auto max-h-[80vh] space-y-4">
+
+            <Item label="UP3" value={data.up3} />
+            <Item label="ULP" value={data.ulp} />
+            <Item label="Penyulang" value={data.penyulang} />
+            <Item label="Zona Proteksi" value={data.zona} />
+            <Item label="Section" value={data.section} />
+            <Item label="PANJANG ASSET (KM)" value={data.kms_aset} />
+            <Item label="KMS INSPEKSI" value={data.kms_inspeksi} />
+            <Item label="Tujuan Penjadwalan" value={data.tujuan_penjadwalan} />
+
+            {/* progress */}
+            <ProgressItem value={data.progress} />
+
+            {/* tambahkan temuan (di bawah progress, rata kanan) */}
+            <div className="flex justify-end">
+              <button
+                onClick={() => router.push(`/temuan?jadwal_id=${data.id}`)}
+                className="text-sm font-medium text-sky-600 hover:underline whitespace-nowrap"
+              >
+                Tambahkan temuan
+              </button>
+            </div>
+
+            {/* keterangan */}
+            <Item label="Keterangan" value={data.keterangan} />
+
+          </div>
+        </div>
+
+        <button
+          disabled={!hasNext}
+          onClick={onNext}
+          className={`absolute right-0 translate-x-1/2 top-1/2 -translate-y-1/2
+          w-11 h-11 rounded-full bg-white shadow flex items-center justify-center
+          ${!hasNext ? 'opacity-30 cursor-default' : 'hover:bg-gray-100'}`}
+        >
+          <ChevronRight size={24} />
+        </button>
+
+      </div>
+    </div>
+  )
+}
+
+/* ================= ITEM ================= */
+
+function Item({ label, value }: any) {
+  return (
+    <div className="space-y-1">
+      <div className="text-xs text-gray-500">{label}</div>
+      <div className="font-medium text-sm break-words">{value || '-'}</div>
+    </div>
+  )
+}
+
+/* ================= PROGRESS ================= */
+
+function ProgressItem({ value }: { value: any }) {
+  const v = (value || '').toString().toLowerCase().trim()
+
+  let color = 'bg-gray-400'
+
+  if (v.includes('close')) color = 'bg-blue-500'
+  else if (v.includes('done')) color = 'bg-blue-500'
+  else if (v.includes('open')) color = 'bg-yellow-500'
+  else if (v.includes('on')) color = 'bg-green-500'
+
+  return (
+    <div className="space-y-1">
+      <div className="text-xs text-gray-500">Progress</div>
+
+      <div className="flex items-center gap-3">
+        <div className={`w-7 h-7 rounded-full ${color} text-white flex items-center justify-center text-sm font-semibold`}>
+          ✓
+        </div>
+        <div className="font-medium text-sm">{value || '-'}</div>
+      </div>
+    </div>
+  )
 }

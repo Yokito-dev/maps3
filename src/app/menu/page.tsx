@@ -18,16 +18,8 @@ import pmlihraanghgbmc from '@/app/assets/plnup3/PEMELIHARAAN GH GB MC.jpeg'
 import pmlihraangt from '@/app/assets/plnup3/PEMELIHARAAN GT.jpeg'
 import pmlihraanjtm from '@/app/assets/plnup3/PEMELIHARAAN JTM.jpeg'
 
-import {
-    IoMdMenu,
-    IoMdSearch,
-    IoIosBookmarks,
-    IoMdBarcode,
-    IoMdOptions,
-    IoIosFolder,
-    IoIosFolderOpen,
-} from "react-icons/io";
-import { IoLogOutOutline, IoMapSharp } from "react-icons/io5";
+import {IoMdMenu, IoMdSearch, IoIosBookmarks, IoMdBarcode, IoMdOptions, IoIosFolder, IoIosFolderOpen} from "react-icons/io";
+import { IoLogOutOutline, IoMapOutline, IoMapSharp } from "react-icons/io5";
 import Swal from "sweetalert2";
 
 export default function Page() {
@@ -179,7 +171,21 @@ export default function Page() {
                     <SidebarLink href="/aset-jtm" icon={<IoMdOptions />} label="Aset JTM" close={setIsSidebarOpen} />
                     <SidebarLink href="/file-gd" icon={<IoIosFolder />} label="File GD" close={setIsSidebarOpen} />
                     <SidebarLink href="/file-jtm" icon={<IoIosFolderOpen />} label="File JTM" close={setIsSidebarOpen} />
-                    <SidebarLink href="https://experience.arcgis.com/experience/3bd3e44d7b524c42b61a713f2aa33919" icon={<IoMapSharp />} label="Peta Resiko" close={setIsSidebarOpen} />
+
+                    {/* ===== TAMBAHAN DI SINI ===== */}
+                    <SidebarLink
+                        href="/petatiangTM"
+                        icon={<IoMapOutline />}
+                        label="Peta Tiang TM"
+                        close={setIsSidebarOpen}
+                    />
+
+                    <SidebarLink
+                        href="https://experience.arcgis.com/experience/3bd3e44d7b524c42b61a713f2aa33919"
+                        icon={<IoMapSharp />}
+                        label="Peta Resiko"
+                        close={setIsSidebarOpen}
+                    />
 
                     <hr />
                     <button onClick={handleLogoutClick} className="flex items-center gap-2 text-red-600">
