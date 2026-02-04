@@ -1,322 +1,412 @@
-'use client';
+'use client'
 
-import React, { useState } from 'react';
-import { ChevronLeft, ChevronRight, Plus } from 'lucide-react';
-import Image from 'next/image';
-import { useRouter } from 'next/navigation';
-import { IoArrowBack } from 'react-icons/io5';
-import plnKecil from '@/app/assets/plnup3/plnkecil.svg';
-import { useSchedule } from '@/app/context/ScheduleContext';
-import Link from 'next/link';
-
+import React, { useState, useEffect } from 'react'
+import { ChevronLeft, ChevronRight, Plus } from 'lucide-react'
+import Image from 'next/image'
+import { useRouter } from 'next/navigation'
+import { IoArrowBack } from 'react-icons/io5'
+import plnKecil from '@/app/assets/plnup3/plnkecil.svg'
+import Link from 'next/link'
 
 /* ================= TYPES ================= */
 
 interface CalendarEvent {
-  id: number;
-  title: string;
-  date: Date;
-  startTime: string;
-  endTime: string;
-  color: string;
+  id: number
+  title: string
+  date: Date
+  color: string
+  raw: any
 }
+
+/* ================= API ================= */
+
+const API_URL =
+  'https://script.google.com/macros/s/AKfycbxIqjDk5e3ot5xhx7yACC9K2gVZe1SkJZb_Ns3-vT_5YMzp5D__60CD8hbvnlMDVD0uUQ/exec'
 
 /* ================= PAGE ================= */
 
 export default function SchedulePage() {
-  const router = useRouter();
-  const { schedules } = useSchedule();
+  const router = useRouter()
 
-  const [currentDate, setCurrentDate] = useState(new Date());
-  const [view, setView] = useState<'day' | 'week' | 'month'>('month');
-  const [selectedDate, setSelectedDate] = useState<Date | null>(null);
+  const [mounted, setMounted] = useState(false)
+  const [loading, setLoading] = useState(true)
 
-  /* ================= TRANSFORM CONTEXT → EVENTS ================= */
+  const [currentDate, setCurrentDate] = useState<Date>(new Date())
+  const [selectedDate, setSelectedDate] = useState<Date | null>(null)
+  const [view, setView] = useState<'day' | 'week' | 'month'>('month')
 
-  const events: CalendarEvent[] = schedules.map((s) => ({
-    id: s.id,
-    title: `${s.up3} - ${s.namaGardu}`,
-    date: new Date(s.date),
-    startTime: s.startTime,
-    endTime: s.endTime,
-    color: s.status === 'Open' ? '#14b8a6' : '#ef4444',
-  }));
+  const [events, setEvents] = useState<CalendarEvent[]>([])
 
-  /* ================= CONSTANTS ================= */
+  const [openDetail, setOpenDetail] = useState(false)
+  const [selectedEvent, setSelectedEvent] = useState<CalendarEvent | null>(null)
 
-  const bulan = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
-  const hariPendek = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
-  const hariGrid = ['Min', 'Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab'];
+
+  /* ================= MOUNT ================= */
+
+  useEffect(() => {
+    setMounted(true)
+  }, [])
+
+  /* ================= FETCH ================= */
+
+  useEffect(() => {
+    if (!mounted) return
+
+    const fetchSchedule = async () => {
+      try {
+        setLoading(true)
+        const res = await fetch(API_URL)
+        const data = await res.json()
+
+        const mapped: CalendarEvent[] = data
+          .filter((d: any) => d.ulp && d.startDate)
+          .map((d: any, i: number) => ({
+            id: Number(d.id) || i,
+            title: d.ulp,
+            date: new Date(d.startDate),
+            color:
+              d.progress?.toLowerCase().includes('open')
+                ? '#86efac'   // HIJAU
+                : d.progress?.toLowerCase().includes('close')
+                  ? '#fca5a5' // MERAH
+                  : '#9ca3af', // abu-abu (opsional)
+
+            raw: d,
+          }))
+
+        setEvents(mapped)
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    fetchSchedule()
+  }, [mounted])
+
+  /* ================= GUARD ================= */
+
+  if (!mounted || loading) {
+    return (
+      <div className="h-screen flex items-center justify-center bg-gray-50">
+        <div className="flex flex-col items-center gap-3">
+          <div className="w-12 h-12 border-4 border-cyan-400 border-t-transparent rounded-full animate-spin" />
+          <p className="text-sm text-gray-500">Memuat jadwal...</p>
+        </div>
+      </div>
+    )
+  }
+
+  /* ================= CONST ================= */
+
+  const bulan = [
+    'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
+    'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'
+  ]
+
+  const hari = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu']
+  const hariGrid = ['Min', 'Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab']
+
+  const baseDate = selectedDate || currentDate
 
   /* ================= HELPERS ================= */
 
-  const sameDay = (a: Date | null, b: Date | null) =>
-    a && b && a.toDateString() === b.toDateString();
+  const sameDay = (a: Date, b: Date) =>
+    a.toDateString() === b.toDateString()
 
-  const getEvents = (d: Date | null) =>
-    d
-      ? events
-        .filter(e => sameDay(e.date, d))
-        .sort((a, b) => a.startTime.localeCompare(b.startTime))
-      : [];
+  const getEvents = (d: Date) =>
+    events.filter(e => sameDay(e.date, d))
 
   const getDaysInMonth = (d: Date) => {
-    const y = d.getFullYear();
-    const m = d.getMonth();
-    const first = new Date(y, m, 1).getDay();
-    const total = new Date(y, m + 1, 0).getDate();
+    const y = d.getFullYear()
+    const m = d.getMonth()
+    const first = new Date(y, m, 1).getDay()
+    const total = new Date(y, m + 1, 0).getDate()
     return [
       ...Array(first).fill(null),
       ...Array.from({ length: total }, (_, i) => new Date(y, m, i + 1)),
-    ];
-  };
+    ]
+  }
 
-  const weekDates = (d: Date) =>
-    Array.from({ length: 7 }, (_, i) => {
-      const x = new Date(d);
-      x.setDate(d.getDate() - d.getDay() + i);
-      return x;
-    });
+  const days = getDaysInMonth(currentDate)
 
-  const timeSlots = Array.from({ length: 24 }, (_, h) => ({
-    txt: `${h === 0 ? 12 : h > 12 ? h - 12 : h} ${h < 12 ? 'AM' : 'PM'}`,
-  }));
+  const weekDates = (d: Date) => {
+    const start = new Date(d)
+    start.setDate(d.getDate() - d.getDay())
+    return Array.from({ length: 7 }, (_, i) => {
+      const x = new Date(start)
+      x.setDate(start.getDate() + i)
+      return x
+    })
+  }
 
-  const move = (n: number, unit: 'Date' | 'Month') => {
-    const d = new Date(currentDate);
-    d[`set${unit}`](d[`get${unit}`]() + n);
-    setCurrentDate(d);
-    setSelectedDate(d);
-  };
+  const weeks = weekDates(baseDate)
 
-  const title = () => {
-    if (view === 'month') {
-      return `${bulan[currentDate.getMonth()]} ${currentDate.getFullYear()}`;
-    }
+  /* ================= NAV ================= */
+
+  const movePrev = () => {
+    const d = new Date(baseDate)
+    if (view === 'month') d.setMonth(d.getMonth() - 1)
+    if (view === 'week') d.setDate(d.getDate() - 7)
+    if (view === 'day') d.setDate(d.getDate() - 1)
+    setCurrentDate(d)
+    setSelectedDate(d)
+  }
+
+  const moveNext = () => {
+    const d = new Date(baseDate)
+    if (view === 'month') d.setMonth(d.getMonth() + 1)
+    if (view === 'week') d.setDate(d.getDate() + 7)
+    if (view === 'day') d.setDate(d.getDate() + 1)
+    setCurrentDate(d)
+    setSelectedDate(d)
+  }
+
+  const headerLabel = () => {
+    if (view === 'month')
+      return `${bulan[currentDate.getMonth()]} ${currentDate.getFullYear()}`
     if (view === 'week') {
-      const w = weekDates(currentDate);
-      return `${w[0].getDate()} ${bulan[w[0].getMonth()]} – ${w[6].getDate()} ${bulan[w[6].getMonth()]}`;
+      const w = weekDates(baseDate)
+      return `${w[0].getDate()} ${bulan[w[0].getMonth()]} – ${w[6].getDate()} ${bulan[w[6].getMonth()]}`
     }
-    const d = selectedDate || currentDate;
-    return `${hariPendek[d.getDay()]}, ${d.getDate()} ${bulan[d.getMonth()]}`;
-  };
-
-  const pos = (s: string, e: string) => {
-    const [sh, sm] = s.split(':').map(Number);
-    const [eh, em] = e.split(':').map(Number);
-    const st = sh * 60 + sm;
-    const en = eh * 60 + em;
-    return {
-      top: (st / 60) * 64,
-      height: Math.max(((en - st) / 60) * 64, 48),
-    };
-  };
-
-  const days = getDaysInMonth(currentDate);
+    return `${hari[baseDate.getDay()]}, ${baseDate.getDate()} ${bulan[baseDate.getMonth()]}`
+  }
 
   /* ================= RENDER ================= */
 
   return (
-    <div className="h-screen w-screen bg-gray-50 overflow-hidden flex flex-col">
+    <div className="h-screen bg-gray-50 flex flex-col overflow-hidden">
 
       {/* HEADER */}
       <div className="px-4 pt-3">
-        <div className="bg-white rounded-full shadow-lg px-6 py-1 flex items-center gap-3">
-          <button onClick={() => router.push('/menu')} className="w-11 h-11 rounded-full hover:bg-gray-200 flex items-center justify-center">
-            <IoArrowBack size={24} />
+        <div className="bg-white rounded-full shadow px-6 py-2 flex items-center gap-3">
+          <button onClick={() => router.push('/menu')}>
+            <IoArrowBack size={22} />
           </button>
-          <Image src={plnKecil} alt="pln" width={36} height={36} />
+          <Image src={plnKecil} alt="pln" width={34} />
           <h1 className="font-medium">Schedule GH GB MC</h1>
         </div>
       </div>
 
-      {/* CONTENT */}
-      <div className="px-4 pt-4 flex flex-col flex-1 overflow-hidden">
+      {/* DATE NAV */}
+      <div className="flex items-center justify-between px-6 pt-4">
+        <button onClick={movePrev}><ChevronLeft /></button>
+        <div className="font-semibold text-sm">{headerLabel()}</div>
+        <button onClick={moveNext}><ChevronRight /></button>
+      </div>
 
-        {/* CONTROLS */}
-        <div className="bg-white border rounded-lg mb-4">
-          <div className="flex justify-between px-6 py-4">
-            <div className="flex bg-gray-100 p-1 rounded-lg gap-1">
-              {['day', 'week', 'month'].map(v => (
-                <button
-                  key={v}
-                  onClick={() => setView(v as any)}
-                  className={`px-5 py-2 rounded-md text-sm font-semibold ${view === v ? 'bg-white text-sky-600 shadow' : 'text-gray-600'
-                    }`}
-                >
-                  {v === 'day' ? 'Hari' : v === 'week' ? 'Minggu' : 'Bulan'}
-                </button>
-              ))}
-            </div>
+      {/* VIEW SELECT */}
+      <div className="px-4 pt-4 flex gap-2">
+        {['day', 'week', 'month'].map(v => (
+          <button
+            key={v}
+            onClick={() => setView(v as any)}
+            className={`px-4 py-2 rounded-lg text-sm font-semibold ${view === v ? 'bg-white shadow text-sky-600' : 'text-gray-500'
+              }`}
+          >
+            {v === 'day' ? 'Hari' : v === 'week' ? 'Minggu' : 'Bulan'}
+          </button>
+        ))}
+      </div>
 
-            <div className="flex items-center gap-3">
-              <button onClick={() => move(view === 'month' ? -1 : -7, view === 'month' ? 'Month' : 'Date')}>
-                <ChevronLeft />
-              </button>
-              <div className="min-w-[240px] text-center font-semibold">
-                {title()}
-              </div>
-              <button onClick={() => move(view === 'month' ? 1 : 7, view === 'month' ? 'Month' : 'Date')}>
-                <ChevronRight />
-              </button>
-            </div>
-          </div>
-        </div>
-
-        {/* MONTH VIEW */}
-        {view === 'month' && (
-          <div className="bg-white border rounded-lg flex-1 overflow-y-auto">
-            <div className="grid grid-cols-7 bg-gray-50 border-b">
+      {/* MONTH */}
+      {view === 'month' && (
+        <div className="flex-1 px-4 pt-4 overflow-y-auto">
+          <div className="bg-white border rounded-lg">
+            <div className="grid grid-cols-7 bg-gray-100">
               {hariGrid.map(h => (
-                <div key={h} className="py-3 text-center text-xs font-bold">
-                  {h}
-                </div>
+                <div key={h} className="py-2 text-center text-xs font-bold">{h}</div>
               ))}
             </div>
 
             <div className="grid grid-cols-7">
               {days.map((d, i) => (
-                <div
-                  key={i}
-                  onClick={() => d && (setSelectedDate(d), setView('day'))}
-                  className={`min-h-28 border p-2 ${d ? 'cursor-pointer hover:bg-gray-50' : 'bg-gray-50/50'
-                    }`}
-                >
+                <div key={i} className="border min-h-[120px] p-2">
                   {d && (
                     <>
                       <div className="font-semibold mb-1">{d.getDate()}</div>
-                      {getEvents(d).slice(0, 3).map(e => (
-                        <div
-                          key={e.id}
-                          className="text-xs px-2 py-1 rounded truncate"
-                          style={{
-                            background: `${e.color}15`,
-                            color: e.color,
-                            borderLeft: `3px solid ${e.color}`,
-                          }}
-                        >
-                          {e.title}
-                        </div>
-                      ))}
+                      {(() => {
+                        const ev = getEvents(d)
+                        const show = ev.slice(0, 2)
+                        const more = ev.length - 2
+
+                        return (
+                          <>
+                            {show.map(e => (
+                              <div
+                                key={e.id}
+                                onClick={() => {
+                                  setSelectedEvent(e)
+                                  setOpenDetail(true)
+                                }}
+                                className="text-[11px] px-2 py-1 rounded mb-1 cursor-pointer"
+                                style={{ backgroundColor: e.color }}
+                              >
+                                {e.title}
+                              </div>
+                            ))}
+
+                            {more > 0 && (
+                              <div
+                                onClick={() => {
+                                  setSelectedDate(d)
+                                  setView('week')
+                                }}
+                                className="text-xs text-sky-600 cursor-pointer font-medium"
+                              >
+                                +{more} more
+                              </div>
+                            )}
+                          </>
+                        )
+                      })()}
+
                     </>
                   )}
                 </div>
               ))}
             </div>
           </div>
-        )}
+        </div>
+      )}
 
-        {/* WEEK VIEW */}
-        {view === 'week' && (
-          <div className="bg-white border rounded-lg flex-1 overflow-hidden">
-            {/* Week Header */}
-            <div className="grid grid-cols-8 border-b bg-gray-50">
-              <div className="w-20" />
-              {weekDates(currentDate).map((d, i) => (
-                <div
-                  key={i}
-                  className="py-3 text-center text-sm font-semibold border-l"
-                >
-                  {hariPendek[d.getDay()]} <br />
-                  <span className="text-xs font-normal">{d.getDate()}</span>
-                </div>
-              ))}
-            </div>
-
-            {/* Time Grid */}
-            <div className="relative overflow-y-auto h-full">
-              {timeSlots.map((t, i) => (
-                <div key={i} className="flex">
-                  <div className="w-20 text-xs text-right px-3 py-4 bg-gray-50 border-r">
-                    {t.txt}
-                  </div>
-                  {weekDates(currentDate).map((_, j) => (
-                    <div key={j} className="flex-1 h-16 border-b border-l" />
-                  ))}
-                </div>
-              ))}
-
-              {/* Events */}
-              <div className="absolute left-20 right-0 top-0 grid grid-cols-7">
-                {weekDates(currentDate).map((d, dayIndex) => (
-                  <div key={dayIndex} className="relative">
-                    {getEvents(d).map(e => {
-                      const p = pos(e.startTime, e.endTime);
-                      return (
-                        <div
-                          key={e.id}
-                          className="absolute left-1 right-1 rounded-lg p-2 text-xs"
-                          style={{
-                            top: p.top,
-                            height: p.height,
-                            background: `${e.color}15`,
-                            borderLeft: `4px solid ${e.color}`,
-                          }}
-                        >
-                          <div className="font-semibold truncate">{e.title}</div>
-                          <div>{e.startTime} – {e.endTime}</div>
-                        </div>
-                      );
-                    })}
+      {/* WEEK */}
+      {view === 'week' && (
+        <div className="flex-1 px-4 pt-4 overflow-y-auto space-y-4">
+          {weeks.map(d => (
+            <div key={d.toISOString()} className="bg-white border rounded-lg">
+              <div className="px-4 py-2 bg-gray-100 font-semibold">
+                {hari[d.getDay()]}, {d.getDate()} {bulan[d.getMonth()]}
+              </div>
+              <div className="p-3 space-y-2">
+                {getEvents(d).map(e => (
+                  <div
+                    key={e.id}
+                    onClick={() => {
+                      setSelectedEvent(e)
+                      setOpenDetail(true)
+                    }}
+                    className="p-2 rounded cursor-pointer"
+                    style={{ backgroundColor: e.color }}
+                  >
+                    {e.title}
                   </div>
                 ))}
               </div>
             </div>
-          </div>
-        )}
+          ))}
+        </div>
+      )}
 
-
-        {/* DAY VIEW */}
-        {view === 'day' && (
-          <div className="bg-white border rounded-lg flex-1 overflow-hidden">
-            <div className="border-b px-6 py-3 bg-gray-50 font-semibold">
-              {hariPendek[(selectedDate || currentDate).getDay()]}
+      {/* DAY */}
+      {view === 'day' && (
+        <div className="flex-1 px-4 pt-4 overflow-y-auto">
+          {getEvents(baseDate).map(e => (
+            <div
+              key={e.id}
+              onClick={() => {
+                setSelectedEvent(e)
+                setOpenDetail(true)
+              }}
+              className="p-3 mb-2 rounded cursor-pointer"
+              style={{ backgroundColor: e.color }}
+            >
+              {e.title}
             </div>
+          ))}
+        </div>
+      )}
 
-            <div className="relative overflow-y-auto h-full">
-              {timeSlots.map((t, i) => (
-                <div key={i} className="flex">
-                  <div className="w-20 text-xs text-right px-3 py-4 bg-gray-50 border-r">
-                    {t.txt}
-                  </div>
-                  <div className="flex-1 h-16 border-b" />
-                </div>
-              ))}
+      {/* FAB */}
+      <Link href="/GHGBMC-Form">
+        <button className="fixed bottom-8 right-8 w-14 h-14 bg-cyan-400 text-white rounded-full shadow flex items-center justify-center">
+          <Plus size={26} />
+        </button>
+      </Link>
 
-              <div className="absolute left-20 right-0 top-0">
-                {getEvents(selectedDate || currentDate).map(e => {
-                  const p = pos(e.startTime, e.endTime);
-                  return (
-                    <div
-                      key={e.id}
-                      className="absolute left-2 right-2 rounded-lg p-3"
-                      style={{
-                        top: p.top,
-                        height: p.height,
-                        background: `${e.color}15`,
-                        borderLeft: `4px solid ${e.color}`,
-                      }}
-                    >
-                      <div className="font-bold text-sm">{e.title}</div>
-                      <div className="text-xs">
-                        {e.startTime} – {e.endTime}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          </div>
-        )}
-      </div>
-
-{/* ADD */}
-<Link href="/GHGBMC-Form">
-  <button className="fixed bottom-8 right-8 w-14 h-14 bg-teal-500 text-white rounded-full shadow-lg flex items-center justify-center">
-    <Plus size={26} />
-  </button>
-</Link>
-
+      {/* MODAL */}
+      {openDetail && selectedEvent && (
+        <ScheduleDetailModal
+          data={selectedEvent.raw}
+          onClose={() => setOpenDetail(false)}
+        />
+      )}
     </div>
-  );
+  )
 }
+
+/* ================= MODAL ================= */
+
+function ScheduleDetailModal({ data, onClose }: any) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center">
+      <div
+        onClick={onClose}
+        className="absolute inset-0 bg-black/40 backdrop-blur-sm"
+      />
+
+      <div className="relative w-full max-w-2xl bg-white rounded-2xl shadow-xl z-10 overflow-hidden">
+        <div className="flex items-center justify-between px-5 py-4 border-b">
+          <div className="font-semibold">Detail Schedule</div>
+
+          <button
+            onClick={onClose}
+            className="px-2 text-gray-500 hover:text-black"
+          >
+            ✕
+          </button>
+        </div>
+
+        <div className="px-6 py-4 space-y-4 overflow-y-auto max-h-[65vh]">
+          <Item label="UP3" value={data.up3} />
+          <Item label="ULP" value={data.ulp} />
+          <Item label="NAMA GARDU" value={data.namaGardu} />
+          <Item label="STATUS MILIK" value={data.statusMilik} />
+          <Item label="TANGGAL" value={formatTanggal(data.startDate)} />
+          <ProgressItem value={data.progress} />
+        </div>
+      </div>
+    </div>
+  )
+}
+
+
+/* ================= COMPONENT ================= */
+
+const Item = ({ label, value }: any) => (
+  <div>
+    <p className="text-xs text-gray-500">{label}</p>
+    <p className="font-medium">{value || '-'}</p>
+  </div>
+)
+
+const ProgressItem = ({ value }: any) => {
+  const color =
+    value?.toLowerCase().includes('open')
+      ? 'bg-green-400'
+      : value?.toLowerCase().includes('close')
+        ? 'bg-red-400'
+        : 'bg-gray-400'
+
+
+  return (
+    <div>
+      <p className="text-xs text-gray-500">PROGRESS</p>
+      <div className="flex items-center gap-2">
+        <div className={`w-6 h-6 rounded-full ${color} text-white flex items-center justify-center`}>
+          ✓
+        </div>
+        <p className="font-medium">{value || '-'}</p>
+      </div>
+    </div>
+  )
+}
+function formatTanggal(date: any) {
+  if (!date) return '-'
+  const d = new Date(date)
+  return d.toLocaleDateString('id-ID', {
+    day: '2-digit',
+    month: 'long',
+    year: 'numeric',
+  })
+}
+

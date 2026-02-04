@@ -8,15 +8,14 @@ import plnKecil from '@/app/assets/plnup3/plnkecil.svg'
 import { useRouter } from 'next/navigation'
 
 const API_URL =
-'https://script.google.com/macros/s/AKfycbwWaaqmQFyK6dZwaNIhbnUQJQ4QIEpgVsjgWEIaP3E_AumQ0e5O-Sk-s3qCg_JrjDKv9A/exec'
-  // 'https://script.google.com/macros/s/AKfycbzp4aX1c5Kh9ME0Um742ENBJVkCYMkNtO-9XIfXG1tcCSZlBPfr1D5EaxVgGsNB-8rx/exec'
-//'https://script.google.com/macros/s/AKfycbyeZGyvtK9fzLEMXpjJPVRiRGFC8_9G6TVl9P8oA4-fAQoZlSG6HY5EnHFvatbFgEuQDA/exec'
+  'https://script.google.com/macros/s/AKfycbxIqjDk5e3ot5xhx7yACC9K2gVZe1SkJZb_Ns3-vT_5YMzp5D__60CD8hbvnlMDVD0uUQ/exec'
 
 type Row = {
   up3: string
   ulp: string
-  nama_gardu: string
+  namaGardu: string
 }
+
 
 export default function Page() {
   const router = useRouter()
@@ -32,47 +31,13 @@ export default function Page() {
     statusMilik: '',
   })
 
-  const handleSubmit = async () => {
-    const payload = {
-      up3: form.up3,
-      ulp: form.ulp,
-      namaGardu: form.namaGardu,
-      startDate: form.scheduleDate,
-      endDate: form.scheduleDate,
-      progress: progress === 'open' ? 'OPEN INSPEKSI' : 'CLOSE INSPEKSI',
-      colour: progress === 'open' ? 'Green' : 'Red',
-      statusMilik: form.statusMilik,
-    }
-
-    try {
-      await fetch(API_URL, {
-        method: 'POST',
-        mode: 'no-cors',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(payload),
-      })
-
-      alert('Schedule berhasil disimpan')
-      router.push('/menu')
-
-    } catch (err) {
-      console.error(err)
-      alert('Koneksi ke Spreadsheet gagal')
-    }
-  }
-
-
   const change = (k: keyof typeof form, v: string) =>
     setForm(p => ({ ...p, [k]: v }))
 
   useEffect(() => {
     fetch(API_URL)
-      .then(r => r.text())
-      .then(t => {
-        const json = JSON.parse(t)
-        const rows: Row[] = Array.isArray(json) ? json : json.data
+      .then(res => res.json())
+      .then((rows: Row[]) => {
         setData(rows.filter(r => r.up3 === form.up3))
         setLoading(false)
       })
@@ -91,12 +56,10 @@ export default function Page() {
     const m: Record<string, string[]> = {}
 
     data.forEach(d => {
-      if (!d.ulp || !d.nama_gardu) return // ⬅️ TAMBAHAN PENTING
-
+      if (!d.ulp || !d.namaGardu) return
       if (!m[d.ulp]) m[d.ulp] = []
-
-      if (!m[d.ulp].includes(d.nama_gardu)) {
-        m[d.ulp].push(d.nama_gardu)
+      if (!m[d.ulp].includes(d.namaGardu)) {
+        m[d.ulp].push(d.namaGardu)
       }
     })
 
@@ -110,6 +73,65 @@ export default function Page() {
     form.scheduleDate &&
     form.statusMilik &&
     progress
+
+
+  const handleSubmit = async () => {
+    if (!isFormValid) return
+
+    const payload = {
+      up3: form.up3,
+      ulp: form.ulp,
+      namaGardu: form.namaGardu,
+      startDate: form.scheduleDate,
+      endDate: form.scheduleDate,
+      colour: progress === 'open' ? 'Green' : 'Red',
+      progress: progress === 'open'
+        ? 'OPEN INSPEKSI'
+        : 'CLOSE INSPEKSI',
+      statusMilik: form.statusMilik,
+    }
+
+    try {
+      const formBody = new URLSearchParams({
+        up3: form.up3,
+        ulp: form.ulp,
+        namaGardu: form.namaGardu,
+        startDate: form.scheduleDate,
+        endDate: form.scheduleDate,
+        colour: progress === 'open' ? 'Green' : 'Red',
+        progress: progress === 'open'
+          ? 'OPEN INSPEKSI'
+          : 'CLOSE INSPEKSI',
+        statusMilik: form.statusMilik,
+      }).toString()
+
+      const res = await fetch(API_URL, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: formBody,
+      })
+
+
+
+      const json = await res.json()
+
+      if (json.status !== 'success') {
+        throw new Error(json.message)
+      }
+
+      alert(`Schedule tersimpan\nID: ${json.id}`)
+      router.push('/menu')
+
+    } catch (err: any) {
+      console.error(err)
+      alert('Gagal menyimpan data:\n' + err.message)
+    }
+
+  }
+
+
 
   return (
     <div className="h-screen overflow-hidden font-poppins flex flex-col">
@@ -396,7 +418,11 @@ function SearchableAddSelect({ label, value, options, onSave, disabled = false }
   const [open, setOpen] = useState(false)
   const [search, setSearch] = useState('')
 
-  const filtered = options.filter((o: string) => o.toLowerCase().includes(search.toLowerCase()))
+  const filtered = options
+    .filter(o => typeof o === 'string')
+    .map(o => o.trim())
+    .filter(o => o.toLowerCase().includes(search.toLowerCase()))
+
 
   return (
     <>
@@ -467,4 +493,3 @@ function SearchableAddSelect({ label, value, options, onSave, disabled = false }
     </>
   )
 }
-
