@@ -3,7 +3,6 @@ import { createContext, useState, useEffect, useContext } from "react";
 import axios from "../utils/axios";
 import { useRouter } from "next/navigation";
 
-
 // Inisialisasi context
 export const AuthContext = createContext();
 
@@ -19,13 +18,15 @@ export const AuthProvider = ({ children }) => {
 
       try {
         const res = await axios.get("/user", {
-          headers: { Authorization: ` Bearer ${token} `},
+          headers: { Authorization: `Bearer ${token}` }, // Perbaikan spasi pada Bearer
         });
         setUser(res.data);
       } catch (error) {
         console.error("Gagal mengambil data pengguna:", error);
         localStorage.removeItem("auth_token");
         setUser(null);
+        // Opsional: Redirect ke login jika token tidak valid
+        // router.push("/login"); 
       }
     };
 
@@ -43,10 +44,11 @@ export const AuthProvider = ({ children }) => {
       setUser(res.data.user);
 
       // Routing berdasarkan role
+      // Pastikan folder tujuan (lobby, dashboard, dll) memiliki page.tsx
       if (res.data.user.role === "inspektor") {
-        router.push("/lobby");
+        router.push("/menu");
       } else if (res.data.user.role === "admin") {
-        router.push("/dashboard");
+        router.push("/menu");
       } else {
         router.push("/daftaradmin");
       }
@@ -61,21 +63,27 @@ export const AuthProvider = ({ children }) => {
       const token = localStorage.getItem("auth_token");
       if (token) {
         await axios.post("/logout", null, {
-          headers: { Authorization: ` Bearer ${token} `},
+          headers: { Authorization: `Bearer ${token}` },
         });
       }
     } catch (e) {
       console.error("Logout gagal:", e);
     } finally {
+      // --- PERUBAHAN UTAMA DI SINI ---
       localStorage.removeItem("auth_token");
       setUser(null);
-      router.push("/login2");
-      router.replace("/login2");
+
+      // Mengarahkan ke halaman login utama (page.tsx)
+      // Jika file login Anda ada di: app/login/page.tsx -> gunakan "/login"
+      // Jika file login Anda ada di: app/page.tsx (root) -> gunakan "/"
+      
+      router.push("/login"); 
+      router.refresh(); // Membersihkan cache client-side agar state benar-benar segar
     }
   };
 
   return (
-    <AuthContext.Provider value={{ user, login, logout, }}>
+    <AuthContext.Provider value={{ user, login, logout }}>
       {children}
     </AuthContext.Provider>
   );
