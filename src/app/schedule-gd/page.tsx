@@ -23,6 +23,11 @@ interface Event {
   end_date: Date | null;
   progress: string;
   color: string;
+
+  // optional fields (kalau suatu saat ada di sheet)
+  schedule_date?: string | Date;
+  keterangan?: string;
+  tujuan_penjadwalan?: string;
 }
 
 /* ================= HELPERS (single source) ================= */
@@ -37,36 +42,56 @@ const sameDay = (a: Date, b: Date) =>
   a.getMonth() === b.getMonth() &&
   a.getDate() === b.getDate();
 
+const formatDateDMY = (d: any) => {
+  if (!d) return '-';
+  const x = d instanceof Date ? d : new Date(d);
+  if (isNaN(x.getTime())) return '-';
+  const dd = String(x.getDate()).padStart(2, '0');
+  const mm = String(x.getMonth() + 1).padStart(2, '0');
+  const yyyy = x.getFullYear();
+  return `${dd}/${mm}/${yyyy}`;
+};
+
 const mapScheduleData = (data: any[]): Event[] =>
   data.map((d: any, idx: number) => {
-    const colorFromSheet = (d.colour || d.color || "").toString().trim();
+    const colorFromSheet = (d.colour || d.color || '').toString().trim();
     const sheetColorHex =
-      /red/i.test(colorFromSheet) ? "#f87171" :
-      /green/i.test(colorFromSheet) ? "#86efac" :
-      /^#([0-9a-f]{3}|[0-9a-f]{6})/i.test(colorFromSheet) ? colorFromSheet :
-      "";
+      /red/i.test(colorFromSheet)
+        ? '#f87171'
+        : /green/i.test(colorFromSheet)
+        ? '#86efac'
+        : /^#([0-9a-f]{3}|[0-9a-f]{6})/i.test(colorFromSheet)
+        ? colorFromSheet
+        : '';
 
-    const progressText = (d.progress || d.progress_gd || "").toString().toUpperCase();
+    const progressText = (d.progress || d.progress_gd || '').toString().toUpperCase();
     const fallbackHex =
-      /SELESAI|CLOSE/i.test(progressText) ? "#fca5a5" :
-      /OPEN/i.test(progressText) ? "#86efac" :
-      "#7dd3fc";
+      /SELESAI|CLOSE/i.test(progressText)
+        ? '#fca5a5'
+        : /OPEN/i.test(progressText)
+        ? '#86efac'
+        : '#7dd3fc';
 
     return {
-      id: String(d.id ?? ("GD-" + (d.start_date || "") + "-" + idx)),
-      up3: d.up3 ?? "",
-      ulp: d.ulp ?? "",
-      penyulang: d.penyulang ?? "",
-      zona_proteksi: d.zona ?? d.zona_proteksi ?? "",
-      section: d.section ?? "",
-      nama_gardu: d.nama_gardu ?? d.namaGardu ?? "",
-      longlat: d.longlat ?? "",
-      kapasitas: d.kapasitas ?? "",
-      fasa: d.fasa ?? "",
+      id: String(d.id ?? 'GD-' + (d.start_date || '') + '-' + idx),
+      up3: d.up3 ?? '',
+      ulp: d.ulp ?? '',
+      penyulang: d.penyulang ?? '',
+      zona_proteksi: d.zona ?? d.zona_proteksi ?? '',
+      section: d.section ?? '',
+      nama_gardu: d.nama_gardu ?? d.namaGardu ?? '',
+      longlat: d.longlat ?? '',
+      kapasitas: d.kapasitas ?? '',
+      fasa: d.fasa ?? '',
       start_date: d.start_date ? normalizeDate(String(d.start_date)) : new Date(),
       end_date: d.end_date ? normalizeDate(String(d.end_date)) : null,
-      progress: d.progress ?? d.progress_gd ?? "",
+      progress: d.progress ?? d.progress_gd ?? '',
       color: sheetColorHex || fallbackHex,
+
+      // optional passthrough (kalau ada di data)
+      schedule_date: d.schedule_date ?? d.scheduleDate ?? undefined,
+      keterangan: d.keterangan ?? undefined,
+      tujuan_penjadwalan: d.tujuan_penjadwalan ?? d.tujuan ?? undefined,
     } as Event;
   });
 
@@ -94,13 +119,13 @@ export default function SchedulePage() {
   const fetchSchedule = async () => {
     setLoading(true);
     try {
-      const res = await fetch(`${API_URL}?type=schedule`, { cache: "no-store" });
-      if (!res.ok) throw new Error("HTTP " + res.status);
+      const res = await fetch(`${API_URL}?type=schedule`, { cache: 'no-store' });
+      if (!res.ok) throw new Error('HTTP ' + res.status);
       const json = await res.json();
       const data = json.data || [];
       setEvents(mapScheduleData(data));
     } catch (err) {
-      console.error("FETCH FAILED:", err);
+      console.error('FETCH FAILED:', err);
       setEvents([]);
     } finally {
       setLoading(false);
@@ -123,13 +148,12 @@ export default function SchedulePage() {
     const m = path.match(/\/schedule-gd\/(.+)$/);
     if (m) {
       const id = m[1];
-      const ev = events.find(x => x.id === id);
+      const ev = events.find((x) => x.id === id);
       if (ev) {
-        // open using same overlay mechanism
         openDetailFromEvent(ev);
       } else {
         const t = setInterval(() => {
-          const found = events.find(x => x.id === id);
+          const found = events.find((x) => x.id === id);
           if (found) {
             openDetailFromEvent(found);
             clearInterval(t);
@@ -142,14 +166,24 @@ export default function SchedulePage() {
 
   /* ================= UI helpers ================= */
   const bulan = [
-    'Januari','Februari','Maret','April','Mei','Juni',
-    'Juli','Agustus','September','Oktober','November','Desember'
+    'Januari',
+    'Februari',
+    'Maret',
+    'April',
+    'Mei',
+    'Juni',
+    'Juli',
+    'Agustus',
+    'September',
+    'Oktober',
+    'November',
+    'Desember',
   ];
-  const hari = ['Minggu','Senin','Selasa','Rabu','Kamis','Jumat','Sabtu'];
-  const hariGrid = ['Min','Sen','Sel','Rab','Kam','Jum','Sab'];
+  const hari = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
+  const hariGrid = ['Min', 'Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab'];
 
   const baseDate = selectedDate || currentDate;
-  const getEvents = (d: Date) => events.filter(e => sameDay(e.start_date, d));
+  const getEvents = (d: Date) => events.filter((e) => sameDay(e.start_date, d));
 
   const getDaysInMonth = (d: Date) => {
     const y = d.getFullYear();
@@ -213,19 +247,23 @@ export default function SchedulePage() {
   // open overlay using available event (we keep this local to avoid additional API calls)
   const openDetailFromEvent = (ev: Event) => {
     setOpeningDetail(true);
-    const idx = events.findIndex(x => x.id === ev.id);
+    const idx = events.findIndex((x) => x.id === ev.id);
     setCurrentIndex(idx);
     setDetailData(ev); // data is the event object (you can replace with fetched detail)
     setOpenDetailId(String(ev.id));
     setOpeningDetail(false);
-    try { window.history.pushState(null, '', `/schedule-gd/${ev.id}`); } catch (e) {}
+    try {
+      window.history.pushState(null, '', `/schedule-gd/${ev.id}`);
+    } catch (e) {}
   };
 
   const closeDetail = () => {
     setOpenDetailId(null);
     setDetailData(null);
     setCurrentIndex(-1);
-    try { window.history.pushState(null, '', `/schedule-gd`); } catch (e) {}
+    try {
+      window.history.pushState(null, '', `/schedule-gd`);
+    } catch (e) {}
   };
 
   const goPrevDetail = () => {
@@ -244,13 +282,11 @@ export default function SchedulePage() {
 
   /* ================ click handlers ================ */
   const handleEventClick = (e: Event) => {
-    // follow reference pattern: open detail overlay with event as data
     openDetailFromEvent(e);
   };
 
   return (
     <div className="h-screen bg-gray-50 flex flex-col">
-
       {/* HEADER */}
       <div className="px-4 pt-3">
         <div className="bg-white rounded-full shadow px-6 py-2 flex items-center gap-3">
@@ -264,14 +300,18 @@ export default function SchedulePage() {
 
       {/* DATE NAV */}
       <div className="flex items-center justify-between px-6 pt-4">
-        <button onClick={movePrev}><ChevronLeft /></button>
+        <button onClick={movePrev}>
+          <ChevronLeft />
+        </button>
         <div className="font-semibold text-center text-sm">{headerLabel()}</div>
-        <button onClick={moveNext}><ChevronRight /></button>
+        <button onClick={moveNext}>
+          <ChevronRight />
+        </button>
       </div>
 
       {/* VIEW SELECT */}
       <div className="px-4 pt-4 flex gap-2">
-        {['day','week','month'].map(v => (
+        {['day', 'week', 'month'].map((v) => (
           <button
             key={v}
             onClick={() => setView(v as any)}
@@ -296,8 +336,10 @@ export default function SchedulePage() {
         <div className="flex-1 px-4 pt-4 overflow-y-auto">
           <div className="bg-white border rounded-lg">
             <div className="grid grid-cols-7 bg-gray-100">
-              {hariGrid.map(h => (
-                <div key={h} className="py-2 text-center text-xs font-bold">{h}</div>
+              {hariGrid.map((h) => (
+                <div key={h} className="py-2 text-center text-xs font-bold">
+                  {h}
+                </div>
               ))}
             </div>
 
@@ -311,11 +353,15 @@ export default function SchedulePage() {
                   <div key={i} className="border min-h-[120px] p-2">
                     {d && (
                       <>
-                        <div className={`font-semibold mb-1 ${sameDay(d, new Date()) ? 'text-emerald-600' : ''}`}>
+                        <div
+                          className={`font-semibold mb-1 ${
+                            sameDay(d, new Date()) ? 'text-emerald-600' : ''
+                          }`}
+                        >
                           {d.getDate()}
                         </div>
 
-                        {show.map(e => (
+                        {show.map((e) => (
                           <div
                             key={e.id}
                             onClick={() => handleEventClick(e)}
@@ -330,7 +376,10 @@ export default function SchedulePage() {
 
                         {more > 0 && (
                           <div
-                            onClick={() => { setSelectedDate(d); setView('week'); }}
+                            onClick={() => {
+                              setSelectedDate(d);
+                              setView('week');
+                            }}
                             className="text-xs text-sky-500 cursor-pointer"
                           >
                             +{more} more
@@ -346,17 +395,19 @@ export default function SchedulePage() {
         </div>
       ) : view === 'week' ? (
         <div className="flex-1 px-4 pt-4 overflow-y-auto space-y-4">
-          {weeks.map(d => (
+          {weeks.map((d) => (
             <div key={d.toISOString()} className="bg-white border rounded-lg">
               <div className="px-4 py-2 bg-gray-100 font-semibold">
                 {hari[d.getDay()]}, {d.getDate()} {bulan[d.getMonth()]}
               </div>
               <div className="p-3 space-y-2">
-                {getEvents(d).map(e => (
+                {getEvents(d).map((e) => (
                   <div
                     key={e.id}
                     onClick={() => handleEventClick(e)}
-                    className={`p-2 rounded cursor-pointer ${openingDetail ? 'opacity-50 pointer-events-none' : 'hover:opacity-80'}`}
+                    className={`p-2 rounded cursor-pointer ${
+                      openingDetail ? 'opacity-50 pointer-events-none' : 'hover:opacity-80'
+                    }`}
                     style={{ backgroundColor: e.color }}
                   >
                     {e.ulp}
@@ -368,11 +419,13 @@ export default function SchedulePage() {
         </div>
       ) : (
         <div className="flex-1 px-4 pt-4 overflow-y-auto">
-          {getEvents(baseDate).map(e => (
+          {getEvents(baseDate).map((e) => (
             <div
               key={e.id}
               onClick={() => handleEventClick(e)}
-              className={`p-3 mb-2 rounded cursor-pointer ${openingDetail ? 'opacity-50 pointer-events-none' : 'hover:opacity-80'}`}
+              className={`p-3 mb-2 rounded cursor-pointer ${
+                openingDetail ? 'opacity-50 pointer-events-none' : 'hover:opacity-80'
+              }`}
               style={{ backgroundColor: e.color }}
             >
               {e.ulp}
@@ -390,7 +443,7 @@ export default function SchedulePage() {
         <Plus size={26} />
       </button>
 
-      {/* ================= DETAIL OVERLAY (IDENTICAL STYLE / CLASSNAMES TO REFERENCE) ================= */}
+      {/* ================= DETAIL OVERLAY ================= */}
       {openDetailId && detailData && (
         <ScheduleDetailOverlay
           data={detailData}
@@ -403,12 +456,11 @@ export default function SchedulePage() {
           hasNext={currentIndex < events.length - 1}
         />
       )}
-
     </div>
   );
 }
 
-/* ================= DETAIL OVERLAY (copied style/classnames from reference) ================= */
+/* ================= DETAIL OVERLAY ================= */
 
 function ScheduleDetailOverlay({
   data,
@@ -418,19 +470,15 @@ function ScheduleDetailOverlay({
   hasPrev,
   hasNext,
 }: any) {
-
   const router = useRouter();
+
+  const scheduleDateText = formatDateDMY(data.schedule_date ?? data.start_date);
 
   return (
     <div className="fixed inset-0 z-[9999] flex items-center justify-center">
-
-      <div
-        onClick={onClose}
-        className="absolute inset-0 bg-black/40 backdrop-blur-sm"
-      />
+      <div onClick={onClose} className="absolute inset-0 bg-black/40 backdrop-blur-sm" />
 
       <div className="relative flex items-center justify-center w-full max-w-4xl mx-4">
-
         <button
           disabled={!hasPrev}
           onClick={onPrev}
@@ -442,58 +490,59 @@ function ScheduleDetailOverlay({
         </button>
 
         <div className="relative w-full max-w-2xl bg-white rounded-2xl shadow-xl max-h-[90vh] overflow-hidden">
-
           <div className="flex items-center justify-between px-5 py-4 border-b">
             <div className="font-semibold">Detail Schedule</div>
 
-            <button
-              onClick={onClose}
-              className="px-2 text-gray-500 hover:text-black"
-            >
+            <button onClick={onClose} className="px-2 text-gray-500 hover:text-black">
               ✕
             </button>
           </div>
 
-          <div className="px-6 py-4 overflow-y-auto max-h-[80vh] space-y-4">
+          <div className="px-6 py-4 overflow-y-auto max-h-[80vh]">
+            {/* 2 kolom biar mengikuti layout form */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {/* Row 1 */}
+              <Item label="UP3" value={data.up3} />
+              <Item label="Longlat" value={data.longlat} />
 
-            {/* Following items keep the same structure/classnames as reference
-                Content values come from `data` (so data differs but visual structure is identical) */}
+              {/* Row 2 */}
+              <Item label="ULP" value={data.ulp} />
+              <Item label="Kapasitas" value={data.kapasitas} />
 
-            <Item label="UP3" value={data.up3} />
-            <Item label="ULP" value={data.ulp} />
-            <Item label="Penyulang" value={data.penyulang} />
-            <Item label="Zona Proteksi" value={data.zona_proteksi || data.zona} />
-            <Item label="Section" value={data.section} />
+              {/* Row 3 */}
+              <Item label="Nama Gardu" value={data.nama_gardu} />
+              <Item label="Fasa" value={data.fasa} />
 
-            {/* PANJANG ASSET (stacked) then KMS INSPEKSI below it (per your request) */}
-            <div className="space-y-1">
-              <div className="text-xs text-gray-500">PANJANG ASSET (KM)</div>
-              <div className="font-medium text-sm break-words">{data.kapasitas || '-'}</div>
+              {/* Row 4 */}
+              <Item label="Penyulang" value={data.penyulang} />
+              <Item label="Schedule Date" value={scheduleDateText} />
+
+              {/* Row 5 */}
+              <Item label="Zona Proteksi" value={data.zona_proteksi || data.zona} />
+              <ProgressRadioReadonly value={data.progress} />
+
+              {/* Row 6 */}
+              <div className="md:col-span-2">
+                <Item label="Section" value={data.section} />
+              </div>
+
+              {/* Optional */}
+              {data.keterangan !== undefined && (
+                <div className="md:col-span-2">
+                  <Item label="Keterangan" value={data.keterangan} />
+                </div>
+              )}
+
+              {/* tombol temuan */}
+              <div className="md:col-span-2 flex justify-end">
+                <button
+                  onClick={() => router.push(`/temuan?jadwal_id=${data.id}`)}
+                  className="text-sm font-medium text-sky-600 hover:underline whitespace-nowrap"
+                >
+                  Tambahkan temuan
+                </button>
+              </div>
             </div>
-
-            <div className="space-y-1">
-              <div className="text-xs text-gray-500">KMS INSPEKSI</div>
-              <div className="font-medium text-sm break-words">{data.fasa || '-'}</div>
-            </div>
-
-            <Item label="Tujuan Penjadwalan" value={data.tujuan_penjadwalan || data.tujuan || 'Untuk PTT'} />
-
-            {/* progress */}
-            <ProgressItem value={data.progress} />
-
-            {/* tambahkan temuan (di bawah progress, rata kanan) */}
-            <div className="flex justify-end">
-              <button
-                onClick={() => router.push(`/temuan?jadwal_id=${data.id}`)}
-                className="text-sm font-medium text-sky-600 hover:underline whitespace-nowrap"
-              >
-                Tambahkan temuan
-              </button>
-            </div>
-
-            {/* keterangan */}
-            <Item label="Keterangan" value={data.keterangan} />
-
           </div>
         </div>
 
@@ -506,7 +555,6 @@ function ScheduleDetailOverlay({
         >
           <ChevronRight size={24} />
         </button>
-
       </div>
     </div>
   );
@@ -515,36 +563,54 @@ function ScheduleDetailOverlay({
 /* ================= ITEM ================= */
 
 function Item({ label, value }: any) {
+  const display =
+    value === 0 || value === '0'
+      ? String(value)
+      : value !== null && value !== undefined && String(value).trim() !== ''
+      ? String(value)
+      : '-';
+
   return (
     <div className="space-y-1">
       <div className="text-xs text-gray-500">{label}</div>
-      <div className="font-medium text-sm break-words">{value || '-'}</div>
+      <div className="font-medium text-sm break-words">{display}</div>
     </div>
   );
 }
 
-/* ================= PROGRESS ================= */
+/* ================= PROGRESS (radio read-only like form) ================= */
 
-function ProgressItem({ value }: { value: any }) {
-  const v = (value || '').toString().toLowerCase().trim();
-
-  let color = 'bg-gray-400';
-
-  if (v.includes('close')) color = 'bg-blue-500';
-  else if (v.includes('done')) color = 'bg-blue-500';
-  else if (v.includes('open')) color = 'bg-yellow-500';
-  else if (v.includes('on')) color = 'bg-green-500';
+function ProgressRadioReadonly({ value }: { value: any }) {
+  const v = (value || '').toString().toLowerCase();
+  const isOpen = v.includes('open');
+  const isClose = v.includes('close');
 
   return (
-    <div className="space-y-1">
+    <div className="space-y-2">
       <div className="text-xs text-gray-500">Progress</div>
 
-      <div className="flex items-center gap-3">
-        <div className={`w-7 h-7 rounded-full ${color} text-white flex items-center justify-center text-sm font-semibold`}>
-          ✓
-        </div>
-        <div className="font-medium text-sm">{value || '-'}</div>
+      <div className="flex items-center gap-8">
+        <RadioOption label="Open Inspeksi" checked={isOpen} />
+        <RadioOption label="Close Inspeksi" checked={isClose} />
       </div>
+
+      {!isOpen && !isClose && value ? (
+        <div className="text-xs text-gray-400">{String(value)}</div>
+      ) : null}
+    </div>
+  );
+}
+
+function RadioOption({ label, checked }: { label: string; checked: boolean }) {
+  return (
+    <div className="flex items-center gap-3">
+      <div
+        className={`w-6 h-6 rounded-full border-2 flex items-center justify-center
+        ${checked ? 'border-sky-500' : 'border-gray-300'}`}
+      >
+        {checked && <div className="w-3 h-3 rounded-full bg-sky-500" />}
+      </div>
+      <div className="text-sm font-medium">{label}</div>
     </div>
   );
 }
