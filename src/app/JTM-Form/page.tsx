@@ -254,7 +254,7 @@ export default function Page() {
                     md:max-w-[1200px]">
 
                     {/* WRAPPER KHUSUS DESKTOP */}
-                    <div className="flex-1 overflow-y-auto">
+                    <div className="flex-1 overflow-y-auto pr-2">
 
                         {/* ===== LOADING CONDITIONAL ===== */}
                         {loading ? (
@@ -521,21 +521,25 @@ function PopupSelect({
 
                         {/* LIST */}
                         <div className="overflow-y-auto flex-1">
-                            {filtered.map(o => (
-                                <div
-                                    key={o}
-                                    onClick={() => {
-                                        onSave(o)
-                                        setOpen(false)
-                                        setSearch('')
-                                    }}
-                                    className={`py-2 px-3 cursor-pointer rounded-lg transition-all duration-2
-                                    ${value === o ? 'font-bold text-blue-600' : 'hover:bg-gray-100'}`}>
-                                    {o}
-                                </div>
+                            {filtered.map(o => {
+                                const selected = o === value
 
-                            ))}
-
+                                return (
+                                    <div
+                                        key={o}
+                                        onClick={() => {
+                                            onSave(o)
+                                            setOpen(false)
+                                            setSearch('')
+                                        }}
+                                        className={`py-2 px-3 rounded-lg cursor-pointer
+                                            ${selected
+                                                ? 'bg-[#E8F5FB]  text-blue-600 font-semibold'
+                                                : 'hover:bg-gray-100'}`}>
+                                        {o}
+                                    </div>
+                                )
+                            })}
                             {filtered.length === 0 && (
                                 <div className="text-gray-400 text-sm py-4 text-center">
                                     Tidak ada data

@@ -5,13 +5,50 @@ import { useMemo, useState, ChangeEvent, useEffect } from 'react'
 import Image from 'next/image'
 import { IoArrowBack, IoChevronDown, IoClose, IoLocationSharp } from 'react-icons/io5'
 import { useRouter } from 'next/navigation'
-const MapPicker = dynamic(() => import('./MapPicker'), { ssr: false })
+const MapPicker = dynamic(() => import('../components/MapPicker'), { ssr: false })
 
 import bg from '@/app/assets/plnup3/bgnogradient.png'
 import plnKecil from '@/app/assets/plnup3/plnkecil.svg'
 
 const API_URL =
   'https://script.google.com/macros/s/AKfycbyCxXZWyPBCJsyuLZpeynkr6V5FGCsLZopQaUQTPRIMKA6vpXriueq26O1n-SrsK_ALfA/exec'
+
+const DIEKSEKUSI_LIST: string[] = [
+  'TIM PDKB',
+  'TIM HAR UP3',
+  'TIM YANTEK',
+  'PEGAWAI',
+  'PT DEM',
+  'PT NIRHA',
+  'PT SBR',
+  'PT DKE',
+  'PT NUN',
+  'PT LAKAWAN',
+]
+const APAYGDILAKUKAN_LIST: string[] = [
+  'Penggantian / Pemasangan Isolator', 'Penggantian / Pemasangan bending wire berisolasi',
+  'Penggantian / Pemasangan Arrester jaring', 'Pemasangan GSW', 'Pemasangan Tombak Petir',
+  'Rekonduktor', 'Perbaikan Andongan', 'Perbaikan Tiang Miring', 'Penggantian JTM Rantas',
+  'Perbaikan SKTM', 'Perbaikan MVTIC', 'PerbaikaN/Pemasangan Jumper', 'Penggantian skun kabel',
+  'Sisip tiang JTM', 'Perbaikan / Pemasangan skur', 'Perbaikan / Pemasangan tupang tarik',
+  'Perbaikan / Pemasangan tupang tekan', 'Penggantian FCO perc', 'Penyesuaian rating fuselink perc',
+  'Pemasangan / Penggantian DS', 'Pemeliharaan LBS Manual', 'Pembetonan pondasi tiang', 'Penggantian / Konsul tiang',
+  'Pemasangan cover Isolator', 'Pemasangan penghalang panjat', 'Perbaikan/Penggantian Arm Tie',
+  'Pemasangan nameplate', 'Pengecatan tiang besi', 'Sambung baru kons percabangan', 'Pemasangan skur Bambu',
+]
+const MENGAPAJTMDIPELIHARA_LIST: string[] = [
+  'Isolator Flashover / Pecah / Retak Rambut', 'Arrester jebol / rawan petir',
+  'GSW rusak / rawan petir', 'Rawan petir', 'Penampang kecil / rawan pohon',
+  'Andongan kendor', 'Tiang miring', 'JTM rantas', 'SKTM Gangguan / Jebol / Rusak',
+  'MVTIC / Jebol / Rusak', 'Hotspot / paralel grup', 'Andongan panjang / penyesuaian',
+  'Skur putus / rusak / tidak ada', 'Tupang tarik putus / rusak / tidak ada',
+  'Tupang tekan jatuh / tidak ada', 'FCO perc rusak / tidak ada',
+  'Fuselink perc tidak sesuai (bypass)', 'DS rusak / tidak ada',
+  'LBS Manual perlu dipelihara', 'Tiang JTM pendek / butuh Row',
+  'Lokasi rawan binatang', 'Traves miring / rusak', 'Arm Tie rusak / miring',
+  'Name plate JTM tidak ada', 'Tiang besi berkarat',
+  'Pengikat isolator rusak / tidak sesuai',
+]
 
 /* ================= PAGE ================= */
 
@@ -236,13 +273,13 @@ export default function Page() {
             md:p-10
             md:max-w-[1200px]">
 
-          <div className="flex-1 overflow-y-auto pr-6">
+          <div className="flex-1 overflow-y-auto pr-4">
 
             {/* FORM UTAMA */}
-            <div className="w-full grid grid-cols-1 md:grid-cols-2 gap-x-10 gap-y-8">
+            <div className="w-full grid grid-cols-1 md:grid-cols-2 gap-x-10 gap-y-6">
 
               {/* ================= KIRI ================= */}
-              <div className="flex flex-col gap-8">
+              <div className="flex flex-col gap-6">
 
                 <Input label="UP3" value={form.up3} readOnly />
 
@@ -289,6 +326,7 @@ export default function Page() {
                   value={form.section}
                   options={sectionList}
                   disabled={!form.zonaProteksi}
+                  searchable
                   onSave={v => handleChange('section', v)}
                   onClear={() => handleChange('section', '')}
                 />
@@ -303,7 +341,8 @@ export default function Page() {
                 <PopupSelect
                   label="Mengapa JTM dipelihara?"
                   value={form.alasan}
-                  options={['Gangguan', 'Usia Peralatan', 'Hasil Inspeksi']}
+                  options={MENGAPAJTMDIPELIHARA_LIST}
+                  searchable
                   onSave={v => handleChange('alasan', v)}
                   onClear={() => handleChange('alasan', '')}
                 />
@@ -311,16 +350,13 @@ export default function Page() {
               </div>
 
               {/* ================= KANAN ================= */}
-              <div className="flex flex-col gap-8">
+              <div className="flex flex-col gap-6">
 
                 <PopupSelect
                   label="Apa yang dilakukan?"
                   value={form.pemeliharaan}
-                  options={[
-                    'Pemeliharaan Preventif',
-                    'Pemeliharaan Korektif',
-                    'Inspeksi Rutin',
-                  ]}
+                  options={APAYGDILAKUKAN_LIST}
+                  searchable
                   onSave={v => handleChange('pemeliharaan', v)}
                   onClear={() => handleChange('pemeliharaan', '')}
                 />
@@ -334,12 +370,13 @@ export default function Page() {
                   }
                 />
 
-                <Input
+                <PopupSelect
                   label="Dieksekusi oleh?"
                   value={form.dieksekusiOleh}
-                  onChange={e =>
-                    handleChange('dieksekusiOleh', e.target.value)
-                  }
+                  options={DIEKSEKUSI_LIST}
+                  searchable
+                  onSave={v => handleChange('dieksekusiOleh', v)}
+                  onClear={() => handleChange('dieksekusiOleh', '')}
                 />
 
                 <NumberStepper
@@ -386,7 +423,7 @@ export default function Page() {
                 <input
                   value={form.koordinat}
                   onChange={e => handleChange("koordinat", e.target.value)}
-                  className="w-full py-3 pl-12 pr-5 border-2 border-[#2FA6DE] rounded-full"
+                  className="w-full py-3 pl-5 pr-12 border-2 border-[#2FA6DE] rounded-full"
                   placeholder="Klik ikon map untuk memilih lokasi"
                 />
 
@@ -394,9 +431,8 @@ export default function Page() {
                 <button
                   type="button"
                   onClick={() => setShowMap(prev => !prev)}
-                  className="absolute left-4 top-1/2 -translate-y-1/2 text-[#2FA6DE]"
-                >
-                  🗺️
+                  className="absolute right-4 top-1/2 -translate-y-1/2 text-dark">
+                  <IoLocationSharp size={20} />
                 </button>
               </div>
 
@@ -593,6 +629,7 @@ type PopupSelectProps = {
   onSave: (value: string) => void
   onClear: () => void
   disabled?: boolean
+  searchable?: boolean   // ⬅️ TAMBAH
 }
 
 function PopupSelect({
@@ -602,13 +639,16 @@ function PopupSelect({
   onSave,
   onClear,
   disabled = false,
+  searchable = false,   // ⬅️ default OFF
 }: PopupSelectProps) {
   const [open, setOpen] = useState(false)
   const [search, setSearch] = useState('')
 
-  const filtered = options.filter(o =>
-    o.toLowerCase().includes(search.toLowerCase())
-  )
+  const filtered = searchable
+    ? options.filter(o =>
+      o.toLowerCase().includes(search.toLowerCase())
+    )
+    : options
 
   return (
     <>
@@ -619,7 +659,11 @@ function PopupSelect({
         <label className="text-sm font-semibold">
           {label} <span className="text-red-500">*</span>
         </label>
-        <div className="mt-2 px-5 py-3 border-2 border-[#2FA6DE] rounded-full flex justify-between">
+        <div className={`mt-2 px-5 py-3 rounded-full flex items-center justify-between border-2 transition
+        ${value
+              ? 'border-[#2FA6DE] bg-[#2FA6DE]/5'
+              : 'border-[#2FA6DE]'
+            } hover:bg-[#2FA6DE]/5`}>
           <span className={value ? '' : 'text-gray-400'}>
             {value || `Pilih ${label}`}
           </span>
@@ -638,27 +682,35 @@ function PopupSelect({
           >
             <h2 className="font-bold mb-3">{label}</h2>
 
-            <input
-              placeholder="Cari..."
-              value={search}
-              onChange={e => setSearch(e.target.value)}
-              className="mb-3 px-4 py-2 border rounded-lg"
-            />
+            {searchable && (
+              <input
+                placeholder="Cari..."
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+                className="mb-3 px-4 py-2 border rounded-lg"
+              />
+            )}
 
             <div className="overflow-y-auto flex-1">
-              {filtered.map(o => (
-                <div
-                  key={o}
-                  onClick={() => {
-                    onSave(o)
-                    setOpen(false)
-                    setSearch('')
-                  }}
-                  className="py-2 px-3 hover:bg-gray-100 cursor-pointer rounded-lg"
-                >
-                  {o}
-                </div>
-              ))}
+              {filtered.map(o => {
+                const selected = o === value
+
+                return (
+                  <div
+                    key={o}
+                    onClick={() => {
+                      onSave(o)
+                      setOpen(false)
+                      setSearch('')
+                    }}
+                    className={`py-2 px-3 rounded-lg cursor-pointer
+                      ${selected
+                        ? 'bg-[#E8F5FB]  text-blue-600 font-semibold'
+                        : 'hover:bg-gray-100'}`}>
+                    {o}
+                  </div>
+                )
+              })}
             </div>
 
             <button
