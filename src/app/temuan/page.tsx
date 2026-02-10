@@ -3,13 +3,13 @@
 import dynamic from 'next/dynamic'
 import { useState, ChangeEvent } from 'react'
 import Image from 'next/image'
-import { IoArrowBack, IoLocationSharp, IoClose } from 'react-icons/io5'
+import { IoArrowBack, IoClose } from 'react-icons/io5'
 import { useRouter } from 'next/navigation'
 
 import bg from '@/app/assets/plnup3/bgnogradient.png'
 import plnKecil from '@/app/assets/plnup3/plnkecil.svg'
 
-const MapPicker = dynamic(() => import('../components/MapPicker'), { ssr: false })
+const Mapsi = dynamic(() => import('../components/mapsi'), { ssr: false })
 
 export default function Page() {
   const router = useRouter()
@@ -17,21 +17,21 @@ export default function Page() {
   const [form, setForm] = useState({
     namaTemuan: '',
     keterangan: '',
-    koordinat: '',
+    koordinatList: [''],
+    panjangKms: '',
   })
 
-  const handleChange = (key: keyof typeof form, val: string) => {
-    setForm(p => ({ ...p, [key]: val }))
-  }
-
-  const [showMap, setShowMap] = useState(false)
+  const koordinatString = form.koordinatList
+    .map(v => v.trim())
+    .filter(v => v !== '')
+    .join(';')
 
   const [fotoTemuan, setFotoTemuan] = useState<File[]>([])
 
   const isValid =
     form.namaTemuan.trim() !== '' &&
     form.keterangan.trim() !== '' &&
-    form.koordinat.trim() !== '' &&
+    form.koordinatList.some(v => v.trim() !== '') &&
     fotoTemuan.length > 0
 
   return (
@@ -54,7 +54,6 @@ export default function Page() {
         </div>
       </div>
 
-      {/* CONTENT */}
       <main className="flex-1 flex justify-center items-start px-0 pt-4 md:p-4 overflow-hidden">
         <div
           className="
@@ -72,75 +71,144 @@ export default function Page() {
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-x-10 gap-y-8">
 
-              {/* ================= KIRI ================= */}
+              {/* KIRI */}
               <div className="flex flex-col gap-6">
 
                 <Input
                   label="Nama Temuan"
                   value={form.namaTemuan}
-                  onChange={e => handleChange('namaTemuan', e.target.value)}
+                  onChange={e =>
+                    setForm(p => ({ ...p, namaTemuan: e.target.value }))
+                  }
                 />
 
-                {/* Koordinat */}
+                {/* KOORDINAT */}
                 <div>
                   <label className="text-sm font-semibold">
                     Koordinat <span className="text-red-500">*</span>
                   </label>
 
-                  <div className="mt-2 relative">
-                    <input
-                      value={form.koordinat}
-                      onChange={e => handleChange('koordinat', e.target.value)}
-                      className="w-full py-3 pl-5 pr-12 border-2 border-[#2FA6DE] rounded-full"
-                      placeholder="Klik ikon map untuk memilih lokasi"
-                    />
+                  <div className="mt-2 flex flex-col gap-2">
+
+                    {form.koordinatList.map((val, i) => (
+                      <div key={i} className="relative">
+                        <input
+                          value={val}
+                          onChange={e => {
+                            const copy = [...form.koordinatList]
+                            copy[i] = e.target.value
+                            setForm(p => ({ ...p, koordinatList: copy }))
+                          }}
+                          className="w-full py-3 pl-5 pr-12 border-2 border-[#2FA6DE] rounded-full"
+                          placeholder={`Koordinat ${i + 1} (lat,lng)`}
+                        />
+
+                        {form.koordinatList.length > 1 && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const copy = form.koordinatList.filter((_, x) => x !== i)
+                              setForm(p => ({ ...p, koordinatList: copy }))
+                            }}
+                            className="absolute right-4 top-1/2 -translate-y-1/2 text-red-500"
+                          >
+                            <IoClose size={18} />
+                          </button>
+                        )}
+                      </div>
+                    ))}
 
                     <button
                       type="button"
-                      onClick={() => setShowMap(p => !p)}
-                      className="absolute right-4 top-1/2 -translate-y-1/2"
+                      onClick={() =>
+                        setForm(p => ({
+                          ...p,
+                          koordinatList: [...p.koordinatList, ''],
+                        }))
+                      }
+                      className="text-sm text-sky-600 font-medium self-start"
                     >
-                      <IoLocationSharp size={20} />
+                      + Tambah koordinat
                     </button>
+
+                    {/* lokasi sekarang */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (!navigator.geolocation) {
+                          alert('Browser tidak mendukung GPS')
+                          return
+                        }
+
+                        navigator.geolocation.getCurrentPosition(pos => {
+                          const lat = pos.coords.latitude
+                          const lng = pos.coords.longitude
+
+                          setForm(p => ({
+                            ...p,
+                            koordinatList: [
+                              ...p.koordinatList.filter(v => v.trim() !== ''),
+                              `${lat},${lng}`,
+                            ],
+                          }))
+                        })
+                      }}
+                      className="text-sm text-emerald-600 font-medium self-start"
+                    >
+                      📍 Gunakan lokasi saya
+                    </button>
+
                   </div>
 
-                  {showMap && (
+                  {form.koordinatList.some(v => v.trim() !== '') && (
                     <div
                       className="mt-4 w-full rounded-xl border border-slate-300 bg-white"
                       style={{ height: 380 }}
                     >
-                      <div className="w-full h-full">
-                        <MapPicker
-                          koordinat={form.koordinat}
-                          onChange={(v: string) =>
-                            handleChange('koordinat', v)
-                          }
-                        />
-                      </div>
+                      <Mapsi
+                        koordinat={koordinatString}
+                        onDistanceChange={(km) =>
+                          setForm(p => ({
+                            ...p,
+                            panjangKms: km.toString(),
+                          }))
+                        }
+                      />
                     </div>
                   )}
                 </div>
 
+                {/* PANJANG KMS */}
+                <div>
+                  <label className="text-sm font-semibold">
+                    Panjang KMS
+                  </label>
+                  <input
+                    value={form.panjangKms}
+                    readOnly
+                    className="mt-2 w-full py-3 px-5 border-2 border-[#2FA6DE] rounded-full bg-slate-50"
+                  />
+                </div>
+
               </div>
 
-              {/* ================= KANAN ================= */}
+              {/* KANAN */}
               <div className="flex flex-col gap-6">
 
-                {/* Keterangan */}
                 <div>
                   <label className="text-sm font-semibold">
                     Keterangan <span className="text-red-500">*</span>
                   </label>
                   <textarea
                     value={form.keterangan}
-                    onChange={e => handleChange('keterangan', e.target.value)}
+                    onChange={e =>
+                      setForm(p => ({ ...p, keterangan: e.target.value }))
+                    }
                     rows={5}
                     className="mt-2 w-full py-3 px-5 border-2 border-[#2FA6DE] rounded-2xl resize-none"
-                    placeholder="Keterangan temuan"
                   />
                 </div>
 
-                {/* FOTO TEMUAN */}
                 <MultiUploadPreview
                   label="Foto Temuan"
                   files={fotoTemuan}
@@ -150,7 +218,6 @@ export default function Page() {
               </div>
             </div>
 
-            {/* ACTION */}
             <div className="flex gap-4 mt-12 justify-center">
               <button
                 onClick={() => router.back()}
@@ -176,8 +243,7 @@ export default function Page() {
   )
 }
 
-/* ================= INPUT ================= */
-
+/* INPUT */
 function Input({
   label,
   value,
@@ -201,8 +267,7 @@ function Input({
   )
 }
 
-/* ================= MULTI UPLOAD ================= */
-
+/* MULTI UPLOAD */
 function MultiUploadPreview({
   label,
   files,
@@ -213,7 +278,6 @@ function MultiUploadPreview({
   setFiles: (f: File[]) => void
 }) {
   const [open, setOpen] = useState<number | null>(null)
-
   const previews = files.map(f => URL.createObjectURL(f))
 
   return (
