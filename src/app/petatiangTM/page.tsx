@@ -4,6 +4,7 @@ import dynamic from "next/dynamic";
 import { useEffect, useMemo, useState } from "react";
 import "leaflet/dist/leaflet.css";
 import type { Map as LeafletMap } from "leaflet";
+import { useMap } from "react-leaflet"; // ✅ ADD
 
 const MapContainer = dynamic(() => import("react-leaflet").then((m) => m.MapContainer), {
   ssr: false,
@@ -20,10 +21,7 @@ const API_URL =
 
 type Point = {
   rowId: number;
-
-  // ✅ kolom C (CXUNI)
-  ulp: string;
-
+  ulp: string; // ✅ kolom C (CXUNI)
   formattedAddress: string;
   streetAddress: string;
   city: string;
@@ -45,9 +43,7 @@ function haversineKmLatLng(a: { lat: number; lng: number }, b: { lat: number; ln
   const lat1 = toRad(a.lat);
   const lat2 = toRad(b.lat);
 
-  const h =
-    Math.sin(dLat / 2) ** 2 +
-    Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLng / 2) ** 2;
+  const h = Math.sin(dLat / 2) ** 2 + Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLng / 2) ** 2;
 
   return 2 * R * Math.asin(Math.sqrt(h));
 }
@@ -68,6 +64,15 @@ function formatTitle(p: Point) {
   const owner = (p.owner || "-").toString().trim();
   if (addr) return `${ulp} | ${owner} — ${addr}`;
   return `${ulp} | ${owner}`;
+}
+
+/** ✅ FIX: pengganti whenCreated di react-leaflet v4 */
+function MapSetter({ onReady }: { onReady: (m: LeafletMap) => void }) {
+  const map = useMap();
+  useEffect(() => {
+    onReady(map);
+  }, [map, onReady]);
+  return null;
 }
 
 /** ---------- Union Find (Disjoint Set) ---------- */
@@ -98,15 +103,15 @@ class DSU {
 
 /**
  * Build "sebisa mungkin nyambung" per ULP:
- * - bikin kandidat edge pakai k-nearest (grid biar cepat)
- * - lalu Kruskal -> MST
- * - putus kalau edge > cutoffMeters
+ * - tahap 1: MST dari kandidat edge dekat (pakai cutoff sebagai prioritas kedekatan)
+ * - tahap 2: kalau masih ada komponen yang putus, di-bridge antar komponen terdekat
+ *   supaya tetap nyambung (sesuai request "selagi bisa nyambung, nyambung aja").
  */
 function buildMSTSegments(points: Point[], cutoffMeters: number, kNearest = 6): Segment[] {
   const n = points.length;
   if (n < 2) return [];
 
-  // planar projection (meter)
+  // --- proyeksi kasar lat/lng -> meter ---
   const lat0 = points.reduce((s, p) => s + p.latitude, 0) / n;
   const lat0Rad = (lat0 * Math.PI) / 180;
   const mPerDegLat = 110574;
@@ -114,13 +119,24 @@ function buildMSTSegments(points: Point[], cutoffMeters: number, kNearest = 6): 
 
   const xs = new Array<number>(n);
   const ys = new Array<number>(n);
+
+  let minX = Infinity,
+    maxX = -Infinity,
+    minY = Infinity,
+    maxY = -Infinity;
+
   for (let i = 0; i < n; i++) {
     xs[i] = points[i].longitude * mPerDegLng;
     ys[i] = points[i].latitude * mPerDegLat;
+
+    if (xs[i] < minX) minX = xs[i];
+    if (xs[i] > maxX) maxX = xs[i];
+    if (ys[i] < minY) minY = ys[i];
+    if (ys[i] > maxY) maxY = ys[i];
   }
 
-  // grid index
-  const cell = Math.max(300, Math.min(800, Math.floor(cutoffMeters / 3)));
+  // cell agak lebih besar biar grid gak terlalu padat & bridging lebih murah
+  const cell = Math.max(500, Math.min(2000, Math.floor(cutoffMeters / 2) || 1000));
   const key = (cx: number, cy: number) => `${cx}|${cy}`;
 
   const grid = new Map<string, number[]>();
@@ -132,29 +148,62 @@ function buildMSTSegments(points: Point[], cutoffMeters: number, kNearest = 6): 
     grid.get(k)!.push(i);
   }
 
-  type Edge = { i: number; j: number; d: number };
+  type Edge = { i: number; j: number; d: number }; // d dalam meter (aproks)
   const edges: Edge[] = [];
   const seen = new Set<string>();
 
   const rCells = Math.max(1, Math.ceil(cutoffMeters / cell));
+  const fallbackR = Math.max(rCells + 2, 12);
 
+  // --- Tahap 1: kandidat edge dekat-dekat (soft cutoff) ---
   for (let i = 0; i < n; i++) {
     const cx = Math.floor(xs[i] / cell);
     const cy = Math.floor(ys[i] / cell);
 
     const candidates: { j: number; d: number }[] = [];
+    const candSeen = new Set<number>();
 
-    for (let dx = -rCells; dx <= rCells; dx++) {
-      for (let dy = -rCells; dy <= rCells; dy++) {
-        const cand = grid.get(key(cx + dx, cy + dy));
-        if (!cand) continue;
+    const scanSquare = (r: number, useCutoff: boolean) => {
+      for (let dx = -r; dx <= r; dx++) {
+        for (let dy = -r; dy <= r; dy++) {
+          const cand = grid.get(key(cx + dx, cy + dy));
+          if (!cand) continue;
 
-        for (const j of cand) {
-          if (j === i) continue;
-          const d = Math.hypot(xs[j] - xs[i], ys[j] - ys[i]); // meters
-          if (d <= cutoffMeters) candidates.push({ j, d });
+          for (const j of cand) {
+            if (j === i) continue;
+            if (candSeen.has(j)) continue;
+
+            const d = Math.hypot(xs[j] - xs[i], ys[j] - ys[i]);
+            if (useCutoff && d > cutoffMeters) continue;
+
+            candSeen.add(j);
+            candidates.push({ j, d });
+          }
         }
       }
+    };
+
+    // 1) ambil yang dalam cutoff dulu (biar garis rapi)
+    scanSquare(rCells, true);
+
+    // 2) kalau kandidat kurang, tambah jangkauan (biar titik gak sendirian)
+    if (candidates.length < Math.min(kNearest, n - 1)) {
+      scanSquare(fallbackR, false);
+    }
+
+    // 3) fallback brute nearest kalau masih kosong (sangat jarang)
+    if (!candidates.length) {
+      let bestJ = -1;
+      let bestD = Infinity;
+      for (let j = 0; j < n; j++) {
+        if (j === i) continue;
+        const d = Math.hypot(xs[j] - xs[i], ys[j] - ys[i]);
+        if (d < bestD) {
+          bestD = d;
+          bestJ = j;
+        }
+      }
+      if (bestJ !== -1) candidates.push({ j: bestJ, d: bestD });
     }
 
     if (!candidates.length) continue;
@@ -187,13 +236,109 @@ function buildMSTSegments(points: Point[], cutoffMeters: number, kNearest = 6): 
     }
   }
 
+  // --- Tahap 2: bridging antar komponen biar selalu nyambung ---
+  const buildCompMembers = () => {
+    const m = new Map<number, number[]>();
+    for (let i = 0; i < n; i++) {
+      const r = dsu.find(i);
+      if (!m.has(r)) m.set(r, []);
+      m.get(r)!.push(i);
+    }
+    return m;
+  };
+
+  // batas radius scan grid (dalam satuan cell) biar gak liar banget
+  const maxRCap = Math.min(200, Math.ceil(Math.max(maxX - minX, maxY - minY) / cell) + 2);
+
+  const nearestDifferentComponent = (i: number, rootI: number): Edge | null => {
+    const cx = Math.floor(xs[i] / cell);
+    const cy = Math.floor(ys[i] / cell);
+
+    let bestJ = -1;
+    let bestD = Infinity;
+    let foundAny = false;
+
+    for (let r = 0; r <= maxRCap; r++) {
+      for (let dx = -r; dx <= r; dx++) {
+        for (let dy = -r; dy <= r; dy++) {
+          const cand = grid.get(key(cx + dx, cy + dy));
+          if (!cand) continue;
+
+          for (const j of cand) {
+            if (j === i) continue;
+            if (dsu.find(j) === rootI) continue;
+
+            const d = Math.hypot(xs[j] - xs[i], ys[j] - ys[i]);
+            if (d < bestD) {
+              bestD = d;
+              bestJ = j;
+            }
+            foundAny = true;
+          }
+        }
+      }
+
+      // early stop kalau radius sekarang sudah lebih jauh dari bestD
+      if (foundAny && r * cell > bestD) break;
+    }
+
+    // brute fallback kalau bener-bener gak ketemu (jarang)
+    if (bestJ === -1) {
+      for (let j = 0; j < n; j++) {
+        if (j === i) continue;
+        if (dsu.find(j) === rootI) continue;
+
+        const d = Math.hypot(xs[j] - xs[i], ys[j] - ys[i]);
+        if (d < bestD) {
+          bestD = d;
+          bestJ = j;
+        }
+      }
+    }
+
+    if (bestJ === -1) return null;
+    return { i, j: bestJ, d: bestD };
+  };
+
+  // Boruvka-style bridging (sampling biar tetap ringan)
+  for (let loop = 0; loop < 12 && segs.length < n - 1; loop++) {
+    const comps = buildCompMembers();
+    if (comps.size <= 1) break;
+
+    const bestByRoot = new Map<number, Edge>();
+    const sampleLimit = 80;
+
+    for (const [root, members] of comps) {
+      const step = Math.max(1, Math.floor(members.length / sampleLimit));
+
+      for (let t = 0; t < members.length; t += step) {
+        const idx = members[t];
+        const e = nearestDifferentComponent(idx, root);
+        if (!e) continue;
+
+        const cur = bestByRoot.get(root);
+        if (!cur || e.d < cur.d) bestByRoot.set(root, e);
+      }
+    }
+
+    let anyUnion = false;
+    for (const e of bestByRoot.values()) {
+      if (dsu.union(e.i, e.j)) {
+        segs.push([
+          [points[e.i].latitude, points[e.i].longitude],
+          [points[e.j].latitude, points[e.j].longitude],
+        ]);
+        anyUnion = true;
+      }
+    }
+
+    if (!anyUnion) break;
+  }
+
   return segs;
 }
 
-/**
- * AUTO cutoff: ambil p95 jarak tetangga terdekat lalu kali multiplier
- * => definisi "jauh banget"
- */
+/** AUTO cutoff: p95 nearest-neighbor * multiplier */
 function nearestNeighborMeters(points: Point[]): number[] {
   const n = points.length;
   if (n < 2) return [];
@@ -470,7 +615,6 @@ export default function MapsPage() {
 
   const effectiveCutoffMeters = autoCutoff ? cutoffMetersAuto : cutoffMetersManual;
 
-  // ✅ garis ULP + total km
   const ulpLineInfo = useMemo(() => {
     if (!showUlpLines) return { notice: "", segments: [] as Segment[], totalKm: 0 };
 
@@ -524,6 +668,12 @@ export default function MapsPage() {
           width: 390,
           boxShadow: "0px 2px 10px rgba(0,0,0,0.2)",
           fontSize: 13,
+
+          // ✅ SCROLL kalau konten kepanjangan
+          maxHeight: "calc(100vh - 40px)",
+          overflowY: "auto",
+          overflowX: "hidden",
+          WebkitOverflowScrolling: "touch",
         }}
       >
         <div style={{ display: "flex", justifyContent: "space-between", gap: 8 }}>
@@ -593,7 +743,7 @@ export default function MapsPage() {
           </div>
 
           <div style={{ marginTop: 6, fontSize: 12, color: "#555" }}>
-            Putus cuma kalau jaraknya udah jauh banget.
+            Garis akan diusahakan <b>nyambung terus</b> per ULP (cutoff untuk prioritas yang dekat dulu).
           </div>
 
           <div style={{ display: "flex", gap: 10, marginTop: 10, alignItems: "center" }}>
@@ -603,7 +753,7 @@ export default function MapsPage() {
                 checked={autoCutoff}
                 onChange={(e) => setAutoCutoff(e.target.checked)}
               />
-              Auto batas putus
+              Auto batas (prioritas jarak dekat)
             </label>
             <div style={{ marginLeft: "auto", fontSize: 12, color: "#444" }}>
               cutoff: <b>{effectiveCutoffMeters} m</b>
@@ -612,7 +762,7 @@ export default function MapsPage() {
 
           {!autoCutoff && (
             <div style={{ display: "flex", gap: 8, marginTop: 8, alignItems: "center" }}>
-              <div style={{ width: 170 }}>Putus jika &gt; (m)</div>
+              <div style={{ width: 170 }}>Prioritas dekat &lt;= (m)</div>
               <input
                 type="number"
                 value={cutoffMetersManual}
@@ -674,55 +824,6 @@ export default function MapsPage() {
                 </div>
                 {roadErr ? <div style={{ color: "#d32f2f", marginTop: 6 }}>{roadErr}</div> : null}
               </div>
-
-              {measurePoints.length > 0 && (
-                <div style={{ marginTop: 10 }}>
-                  <div style={{ fontWeight: 600, marginBottom: 6 }}>Daftar Titik</div>
-                  <div
-                    style={{
-                      maxHeight: 140,
-                      overflow: "auto",
-                      border: "1px solid #eee",
-                      borderRadius: 6,
-                      padding: 8,
-                    }}
-                  >
-                    {measurePoints.map((p, idx) => (
-                      <div
-                        key={p.rowId}
-                        style={{
-                          display: "flex",
-                          justifyContent: "space-between",
-                          gap: 8,
-                          padding: "6px 0",
-                          borderBottom:
-                            idx === measurePoints.length - 1 ? "none" : "1px dashed #eee",
-                        }}
-                      >
-                        <div style={{ lineHeight: 1.2 }}>
-                          <b>Titik {idx + 1}:</b> {formatTitle(p)}
-                        </div>
-                        <button
-                          onClick={() =>
-                            setMeasurePoints((prev) => prev.filter((x) => x.rowId !== p.rowId))
-                          }
-                          style={{
-                            border: "1px solid #ddd",
-                            background: "white",
-                            borderRadius: 6,
-                            padding: "2px 8px",
-                            cursor: "pointer",
-                            height: 26,
-                          }}
-                          title="Hapus titik ini"
-                        >
-                          x
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
 
               <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
                 <button
@@ -801,9 +902,11 @@ export default function MapsPage() {
         center={[-5.33, 119.41]}
         zoom={11}
         preferCanvas
-        whenCreated={setMap}
         style={{ height: "100%", width: "100%" }}
       >
+        {/* ✅ SET MAP INSTANCE (pengganti whenCreated) */}
+        <MapSetter onReady={setMap} />
+
         {selectedBase === "normal" ? (
           <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
         ) : (
@@ -827,7 +930,10 @@ export default function MapsPage() {
         )}
 
         {roadLine.length > 1 && (
-          <Polyline positions={roadLine} pathOptions={{ color: "#d32f2f", weight: 4, opacity: 0.9 }} />
+          <Polyline
+            positions={roadLine}
+            pathOptions={{ color: "#d32f2f", weight: 4, opacity: 0.9 }}
+          />
         )}
 
         {points.map((d) => {
