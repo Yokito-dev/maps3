@@ -16,34 +16,61 @@ type Row = {
   namaGardu: string
 }
 
+const INITIAL_FORM = {
+  up3: 'UP3 MAKASSAR SELATAN',
+  ulp: '',
+  namaGardu: '',
+  scheduleDate: '',
+  statusMilik: '',
+}
+
+const CACHE_KEY = 'plnup3_master_rows_v1'
+const CACHE_TTL = 1000 * 60 * 60 // 1 jam
+
 export default function Page() {
   const router = useRouter()
   const [data, setData] = useState<Row[]>([])
   const [loading, setLoading] = useState(true)
+  const [submitting, setSubmitting] = useState(false)
+
   const [progress, setProgress] = useState<'open' | 'close' | null>(null)
 
-  const [form, setForm] = useState({
-    up3: 'UP3 MAKASSAR SELATAN',
-    ulp: '',
-    namaGardu: '',
-    scheduleDate: '',
-    statusMilik: '',
-  })
+  const [form, setForm] = useState(INITIAL_FORM)
 
   const change = (k: keyof typeof form, v: string) => setForm(p => ({ ...p, [k]: v }))
 
   useEffect(() => {
-    fetch(API_URL)
+    // 1) coba load dari cache biar langsung muncul (ga nunggu fetch)
+    try {
+      const cached = localStorage.getItem(CACHE_KEY)
+      if (cached) {
+        const parsed = JSON.parse(cached) as { t: number; rows: Row[] }
+        if (Date.now() - parsed.t < CACHE_TTL) {
+          setData(parsed.rows.filter(r => r.up3 === INITIAL_FORM.up3))
+          setLoading(false)
+        }
+      }
+    } catch {}
+
+    // 2) tetap fetch terbaru (refresh cache) di background
+    const controller = new AbortController()
+
+    fetch(API_URL, { signal: controller.signal })
       .then(res => res.json())
       .then((rows: Row[]) => {
-        setData(rows.filter(r => r.up3 === form.up3))
+        try {
+          localStorage.setItem(CACHE_KEY, JSON.stringify({ t: Date.now(), rows }))
+        } catch {}
+
+        setData(rows.filter(r => r.up3 === INITIAL_FORM.up3))
         setLoading(false)
       })
       .catch(() => {
         alert('Gagal konek ke Spreadsheet')
         setLoading(false)
       })
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+
+    return () => controller.abort()
   }, [])
 
   const ULP_LIST = useMemo(() => [...new Set(data.map(d => d.ulp).filter(Boolean))], [data])
@@ -58,11 +85,13 @@ export default function Page() {
     return m
   }, [data])
 
-  const isFormValid =
+  const isFormValid = Boolean(
     form.ulp && form.namaGardu && form.scheduleDate && form.statusMilik && progress
+  )
 
   const handleSubmit = async () => {
-    if (!isFormValid) return
+    if (!isFormValid || submitting) return
+    setSubmitting(true)
 
     try {
       const formBody = new URLSearchParams({
@@ -87,10 +116,15 @@ export default function Page() {
       if (json.status !== 'success') throw new Error(json.message)
 
       alert(`Schedule tersimpan\nID: ${json.id}`)
-      router.push('/menu')
+
+      // ✅ tetap di halaman, reset form
+      setForm(INITIAL_FORM)
+      setProgress(null)
     } catch (err: any) {
       console.error(err)
       alert('Gagal menyimpan data:\n' + err.message)
+    } finally {
+      setSubmitting(false)
     }
   }
 
@@ -102,7 +136,7 @@ export default function Page() {
       </div>
       <div className="fixed inset-0 -z-10 bg-gradient-to-t from-[#165F67]/70 via-[#67C2E9]/30 to-transparent backdrop-blur-sm" />
 
-      {/* HEADER (samain style kode bawah) */}
+      {/* HEADER */}
       <div className="px-4 pt-3">
         <div className="bg-white rounded-full shadow px-6 py-2 flex items-center gap-3">
           <button onClick={() => router.push('/menu')}>
@@ -113,7 +147,7 @@ export default function Page() {
         </div>
       </div>
 
-      {/* CONTENT (samain container + overflow) */}
+      {/* CONTENT */}
       <main className="flex-1 flex justify-center items-start px-0 pt-4 md:p-4 overflow-hidden">
         <div
           className="
@@ -127,9 +161,7 @@ export default function Page() {
             md:max-w-[1200px]
           "
         >
-          {/* WRAPPER KHUSUS DESKTOP (scroll kaya kode bawah) */}
           <div className="flex-1 overflow-y-auto pr-2">
-            {/* LOADING (spinner kaya kode bawah) */}
             {loading ? (
               <div className="flex h-full w-full items-center justify-center">
                 <div className="flex flex-col items-center gap-3">
@@ -179,7 +211,7 @@ export default function Page() {
 
                   {/* ================= KANAN ================= */}
                   <div className="flex flex-col gap-6">
-                    {/* Schedule Date (samain styling input date) */}
+                    {/* Schedule Date */}
                     <div>
                       <label className="text-sm font-semibold">
                         Schedule Date <span className="text-red-500">*</span>
@@ -194,7 +226,7 @@ export default function Page() {
                       />
                     </div>
 
-                    {/* PROGRESS (samain size circle w-12 h-12) */}
+                    {/* PROGRESS */}
                     <div>
                       <label className="text-sm font-semibold">
                         Progress <span className="text-red-500">*</span>
@@ -227,23 +259,26 @@ export default function Page() {
                       </div>
                     </div>
 
-                    {/* ACTION (samain button style) */}
+                    {/* ACTION */}
                     <div className="flex gap-4 mt-8 items-end">
                       <button
                         onClick={() => router.push('/schedule-gh-gb-mc')}
                         className="flex-1 py-3 bg-red-500 text-white rounded-full"
+                        disabled={submitting}
                       >
                         Cancel
                       </button>
 
                       <button
                         onClick={handleSubmit}
-                        disabled={!isFormValid}
+                        disabled={!isFormValid || submitting}
                         className={`flex-1 py-3 rounded-full text-white ${
-                          isFormValid ? 'bg-[#2FA6DE]' : 'bg-gray-400 cursor-not-allowed'
+                          isFormValid && !submitting
+                            ? 'bg-[#2FA6DE]'
+                            : 'bg-gray-400 cursor-not-allowed'
                         }`}
                       >
-                        Submit
+                        {submitting ? 'Menyimpan...' : 'Submit'}
                       </button>
                     </div>
                   </div>
@@ -258,7 +293,7 @@ export default function Page() {
   )
 }
 
-/* ================= COMPONENTS (styling nyamain kode bawah) ================= */
+/* ================= COMPONENTS ================= */
 
 function Input({
   label,
@@ -372,9 +407,7 @@ function PopupSelect({
                       setSearch('')
                     }}
                     className={`py-2 px-3 rounded-lg cursor-pointer ${
-                      selected
-                        ? 'bg-[#E8F5FB] text-blue-600 font-semibold'
-                        : 'hover:bg-gray-100'
+                      selected ? 'bg-[#E8F5FB] text-blue-600 font-semibold' : 'hover:bg-gray-100'
                     }`}
                   >
                     {o}
@@ -477,9 +510,7 @@ function SearchableAddSelect({
                       setSearch('')
                     }}
                     className={`py-2 px-3 rounded-lg cursor-pointer ${
-                      selected
-                        ? 'bg-[#E8F5FB] text-blue-600 font-semibold'
-                        : 'hover:bg-gray-100'
+                      selected ? 'bg-[#E8F5FB] text-blue-600 font-semibold' : 'hover:bg-gray-100'
                     }`}
                   >
                     {o}
@@ -488,9 +519,7 @@ function SearchableAddSelect({
               })}
 
               {filtered.length === 0 && (
-                <div className="text-gray-400 text-sm py-4 text-center">
-                  Tidak ada data
-                </div>
+                <div className="text-gray-400 text-sm py-4 text-center">Tidak ada data</div>
               )}
             </div>
 
