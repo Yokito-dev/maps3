@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState, ChangeEvent } from 'react'
+import { useMemo, useState, useEffect, ChangeEvent } from 'react'
 import Image from 'next/image'
 import { IoArrowBack, IoChevronDown, IoClose } from 'react-icons/io5'
 import { useRouter } from 'next/navigation'
@@ -13,6 +13,9 @@ import plnKecil from '@/app/assets/plnup3/plnkecil.svg'
 type SheetRow = {
   up3: string
   ulp: string
+  alasan: string
+  pemeliharaan: string
+  komponen: string
 }
 
 type FormState = {
@@ -32,14 +35,56 @@ type FormState = {
 export default function Page() {
   const router = useRouter()
 
-  const sheetData: SheetRow[] = [
-    { up3: 'UP3 MAKASSAR SELATAN', ulp: 'PANAKKUKANG' },
-  ]
+  /* ================= SHEET ================= */
+
+  const [sheetData, setSheetData] = useState<SheetRow[]>([])
+
+  useEffect(() => {
+    fetch(
+      'https://script.google.com/macros/s/AKfycbxIqjDk5e3ot5xhx7yACC9K2gVZe1SkJZb_Ns3-vT_5YMzp5D__60CD8hbvnlMDVD0uUQ/exec?type=aset'
+    )
+      .then(res => res.json())
+      .then((data: SheetRow[]) => setSheetData(data))
+      .catch(err => console.error('Gagal ambil data sheet', err))
+  }, [])
 
   const ULP_LIST = useMemo(
     () => Array.from(new Set(sheetData.map(d => d.ulp))),
     [sheetData]
   )
+ const ALASAN_DATA = [
+  'ADANYA FLASHOVER/KORONA/SUARA MENDESIS',
+  'PERUBAHAN DARI OPEN CELL KE KUBIKEL',
+  'POSISI PERALATAN DAN TRAFO TANPA SEKAT',
+  'TIDAK ADANYA DUDUKAN KUBIKEL',
+  'KONDISI RUANGAN LEMBAB',
+]
+
+const PEMELIHARAAN_DATA = [
+  'Pemasangan/Pembongkaran Kubikel air insulated motorized, Incomming CB 20 kV',
+  'Pemasangan/Pembongkaran Kubikel air insulated motorized, Outgoing (CB) 20 kV',
+  'Pemasangan/Pembongkaran terminasi / end Mof Indoor three core',
+  'Pemasangan/Pembongkaran elastimol 20 kV',
+  'Membersihkan peralatan kubikel & catu daya (Offline)',
+  'Penggantian kabel dan accesories',
+  'Pemasangan dan setting relay',
+  'Pemasangan dudukan kubikel',
+  'Perbaikan Pentanahan',
+  'Perbaikan pintu gardu',
+  'Pembersihan halaman gardu',
+  'Pengecatan gardu MC',
+  'Aktivasi relay dan heater kubikel',
+]
+
+const KOMPONEN_DATA = [
+  'CLOSED CELL / KUBIKEL',
+  'PMCB',
+  'OPEN CELL',
+]
+
+
+
+  /* ================= FORM ================= */
 
   const [form, setForm] = useState<FormState>({
     up3: 'UP3 MAKASSAR SELATAN',
@@ -53,7 +98,10 @@ export default function Page() {
     alasan: '',
   })
 
-  const handleChange = <K extends keyof FormState>(key: K, val: FormState[K]) => {
+  const handleChange = <K extends keyof FormState>(
+    key: K,
+    val: FormState[K]
+  ) => {
     setForm(prev => ({ ...prev, [key]: val }))
   }
 
@@ -66,14 +114,65 @@ export default function Page() {
   /* ================= VALIDASI ================= */
 
   const isFormValid =
-    Object.values(form).every((v: string) => v.trim() !== '') &&
+    Object.values(form).every(v => v.trim() !== '') &&
     fotoSebelum &&
     fotoProses &&
     fotoSesudah
 
+  /* ================= SUBMIT ================= */
+
+  const handleSubmit = async () => {
+    const body = new URLSearchParams({
+      type: 'pemeliharaan',
+      up3: form.up3,
+      ulp: form.ulp,
+      tanggalHar: form.tanggalHar,
+      longlat: form.longlat,
+      jumlahCell: form.jumlahCell,
+      alasan: form.alasan,
+      pemeliharaan: form.pemeliharaan,
+      komponen: form.komponen,
+      keterangan: form.keterangan,
+      fotoSebelum: fotoSebelum?.name || '',
+      fotoProses: fotoProses?.name || '',
+      fotoSesudah: fotoSesudah?.name || '',
+    })
+
+    await fetch(
+      'https://script.google.com/macros/s/AKfycbxIqjDk5e3ot5xhx7yACC9K2gVZe1SkJZb_Ns3-vT_5YMzp5D__60CD8hbvnlMDVD0uUQ/exec',
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body,
+      }
+    )
+
+    alert('Data berhasil dikirim')
+
+    //RESET FORM
+    setForm({
+      up3: 'UP3 MAKASSAR SELATAN',
+      ulp: '',
+      tanggalHar: '',
+      longlat: '',
+      jumlahCell: '0',
+      pemeliharaan: '',
+      komponen: '',
+      keterangan: '',
+      alasan: '',
+    })
+
+    setFotoSebelum(null)
+    setFotoProses(null)
+    setFotoSesudah(null)
+  }
+
+  /* ================= UI ================= */
+
   return (
     <div className="h-screen overflow-hidden font-poppins flex flex-col">
-
       {/* BACKGROUND */}
       <div className="fixed inset-0 -z-10">
         <Image src={bg} alt="bg" fill className="object-cover" priority />
@@ -85,7 +184,7 @@ export default function Page() {
         <div className="bg-white rounded-full shadow-lg px-6 py-1 flex items-center gap-3">
           <button
             onClick={() => router.push('/menu')}
-            className="w-11 h-11 rounded-full hover:bg-gray-200 flex items-center justify-center"
+            className="w-11 h-11 rounded-full flex items-center justify-center"
           >
             <IoArrowBack size={24} />
           </button>
@@ -97,22 +196,16 @@ export default function Page() {
       {/* CONTENT */}
       <main className="flex-1 flex justify-center items-start px-0 pt-4 md:p-4 overflow-hidden">
         <div className="bg-white shadow-xl w-full flex flex-col h-full overflow-hidden rounded-t-[28px] md:rounded-3xl px-5 py-6 md:p-10 md:max-w-[1200px]">
-
           <div className="flex-1 overflow-y-auto">
 
             {/* FORM */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-x-10 gap-y-8">
-
               <Input label="UP3" value={form.up3} readOnly />
 
               <PopupSelect
                 label="Pemeliharaan Yang Dilakukan"
                 value={form.pemeliharaan}
-                options={[
-                  'Pemeliharaan Preventif',
-                  'Pemeliharaan Korektif',
-                  'Inspeksi Rutin',
-                ]}
+                options={PEMELIHARAAN_DATA}
                 onSave={v => handleChange('pemeliharaan', v)}
                 onClear={() => handleChange('pemeliharaan', '')}
               />
@@ -128,7 +221,7 @@ export default function Page() {
               <PopupSelect
                 label="Komponen"
                 value={form.komponen}
-                options={['Trafo', 'Panel', 'Cubicle', 'Relay']}
+                options={KOMPONEN_DATA}
                 onSave={v => handleChange('komponen', v)}
                 onClear={() => handleChange('komponen', '')}
               />
@@ -145,23 +238,25 @@ export default function Page() {
               <Input
                 label="Keterangan"
                 value={form.keterangan}
+                placeholder='Input Keterangan'
                 onChange={(e: ChangeEvent<HTMLInputElement>) =>
                   handleChange('keterangan', e.target.value)
                 }
               />
 
-              <PopupSelect
+              <Input
                 label="LONG / LAT"
                 value={form.longlat}
-                options={['-5.147665, 119.432732']}
-                onSave={v => handleChange('longlat', v)}
-                onClear={() => handleChange('longlat', '')}
+                placeholder='Input LONG / LAT'
+                onChange={(e: ChangeEvent<HTMLInputElement>) =>
+                  handleChange('longlat', e.target.value)
+                }
               />
 
               <PopupSelect
                 label="Alasan Gardu Dipelihara"
                 value={form.alasan}
-                options={['Gangguan', 'Usia Peralatan', 'Hasil Inspeksi']}
+                options={ALASAN_DATA}
                 onSave={v => handleChange('alasan', v)}
                 onClear={() => handleChange('alasan', '')}
               />
@@ -180,16 +275,16 @@ export default function Page() {
               <UploadPreview label="Foto Sesudah" file={fotoSesudah} setFile={setFotoSesudah} />
             </div>
 
-             {/* ACTION */}
+            {/* ACTION */}
             <div className="flex gap-4 mt-12 justify-center">
               <button className="px-12 py-3 bg-red-500 text-white rounded-full">
                 Cancel
               </button>
               <button
                 disabled={!isFormValid}
-                className={`px-12 py-3 rounded-full text-white ${
-                  isFormValid ? 'bg-[#2FA6DE]' : 'bg-gray-400 cursor-not-allowed'
-                }`}
+                onClick={handleSubmit}
+                className={`px-12 py-3 rounded-full text-white ${isFormValid ? 'bg-[#2FA6DE]' : 'bg-gray-400 cursor-not-allowed'
+                  }`}
               >
                 Submit
               </button>
@@ -283,19 +378,20 @@ function PopupSelect({ label, value, options, onSave, onClear }: PopupSelectProp
   const [open, setOpen] = useState(false)
   const [search, setSearch] = useState('')
 
-  const filtered = options.filter(o =>
-    o.toLowerCase().includes(search.toLowerCase())
-  )
+  const filtered = options
+    .map(o => String(o))
+    .filter(o =>
+      o.toLowerCase().includes(search.toLowerCase())
+    )
+
 
   return (
     <>
       <div onClick={() => setOpen(true)} className="cursor-pointer">
         <label className="text-sm font-semibold">{label} <span className="text-red-500">*</span></label>
         <div className={`mt-2 px-5 py-3 rounded-full flex items-center justify-between border-2 transition
-        ${value
-              ? 'border-[#2FA6DE] bg-[#2FA6DE]/5'
-              : 'border-[#2FA6DE]'
-            } hover:bg-[#2FA6DE]/5`}>
+          ${value ? 'border-[#2FA6DE] bg-[#2FA6DE]/5' : 'border-[#2FA6DE]'}
+          hover:bg-[#2FA6DE]/5`}>
           <span className={value ? '' : 'text-gray-400'}>
             {value || `Pilih ${label}`}
           </span>
@@ -316,7 +412,6 @@ function PopupSelect({ label, value, options, onSave, onClear }: PopupSelectProp
             <div className="overflow-y-auto flex-1">
               {filtered.map(o => {
                 const selected = o === value
-
                 return (
                   <div
                     key={o}
@@ -325,16 +420,22 @@ function PopupSelect({ label, value, options, onSave, onClear }: PopupSelectProp
                       setOpen(false)
                       setSearch('')
                     }}
-                    className={`py-2 px-3 rounded-lg cursor-pointer
-                      ${selected
-                        ? 'bg-[#E8F5FB]  text-blue-600 font-semibold'
-                        : 'hover:bg-gray-100'}`}>
+                    className={`py-2 px-3 rounded-lg cursor-pointer ${selected ? 'bg-[#E8F5FB] text-blue-600 font-semibold' : 'hover:bg-gray-100'
+                      }`}
+                  >
                     {o}
                   </div>
                 )
-              })}     
+              })}
             </div>
-            <button onClick={() => { onClear(); setOpen(false); setSearch('') }} className="text-red-500 mt-3">
+            <button
+              onClick={() => {
+                onClear()
+                setOpen(false)
+                setSearch('')
+              }}
+              className="text-red-500 mt-3"
+            >
               Clear
             </button>
           </div>
@@ -349,10 +450,11 @@ type InputProps = {
   value: string
   type?: string
   readOnly?: boolean
+  placeholder?: string
   onChange?: (e: ChangeEvent<HTMLInputElement>) => void
 }
 
-function Input({ label, value, type = 'text', onChange, readOnly = false }: InputProps) {
+function Input({ label, value, type = 'text', onChange, readOnly = false, placeholder }: InputProps) {
   const isDateEmpty = type === 'date' && !value
 
   return (
@@ -364,6 +466,7 @@ function Input({ label, value, type = 'text', onChange, readOnly = false }: Inpu
         type={type}
         value={value}
         readOnly={readOnly}
+        placeholder={placeholder}
         onChange={onChange}
         className={`mt-2 w-full py-3 px-5 border-2 border-[#2FA6DE] rounded-full
           ${readOnly ? 'bg-gray-100' : ''}

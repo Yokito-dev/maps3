@@ -53,12 +53,12 @@ export default function Page() {
         { id: 1, title: "Schedule GD", link: "/schedule-gd", image: schgd },
         { id: 2, title: "Schedule JTM", link: "/schedule-jtm", image: schjtm },
         { id: 3, title: "Schedule GH GB MC", link: "/schedule-gh-gb-mc", image: schghgbmc },
-        { id: 4, title: "Hasil Inspeksi GD", link: "/hasil-inspeksi-gd", image: hslinpksigd },
-        { id: 5, title: "Hasil Inspeksi JTM", link: "/hasil-inspeksi-jtm", image: hslinpksijtm },
-        { id: 6, title: "Hasil Inspeksi GH GB MC", link: "/hasil-inspeksi-gh-gb-mc", image: hslinpksighgbmc },
-        { id: 7, title: "Pemeliharaan GH GB MC", link: "/pemeliharaan-gh-gb-mc", image: pmlihraanghgbmc },
+        { id: 4, title: "Hasil Inspeksi GD", link: "/HASIL-INSPEKSI-GD-Form", image: hslinpksigd },
+        { id: 5, title: "Hasil Inspeksi JTM", link: "/HASIL-INSPEKSI-JTM-Form", image: hslinpksijtm },
+        { id: 6, title: "Hasil Inspeksi GH GB MC", link: "/HASIL-INSPEKSI-GH-GB-MC-Form", image: hslinpksighgbmc },
+        { id: 7, title: "Pemeliharaan GH GB MC", link: "/PEMELIHARAAN-GH-GB-MC-Form", image: pmlihraanghgbmc },
         { id: 8, title: "Pemeliharaan GT", link: "/pemeliharaan-gt", image: pmlihraangt },
-        { id: 9, title: "Pemeliharaan JTM", link: "/pemeliharaan-jtm", image: pmlihraanjtm },
+        { id: 9, title: "Pemeliharaan JTM", link: "/PEMELIHARAAN-JTM-Form", image: pmlihraanjtm },
     ];
 
     const filteredMenus = dashboardMenus.filter(item =>
