@@ -95,6 +95,7 @@ export default function Page() {
 
     try {
       const formBody = new URLSearchParams({
+        type: 'schedule', 
         up3: form.up3,
         ulp: form.ulp,
         namaGardu: form.namaGardu,
