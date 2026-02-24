@@ -4,7 +4,7 @@ import dynamic from "next/dynamic";
 import { useEffect, useMemo, useState } from "react";
 import "leaflet/dist/leaflet.css";
 import type { Map as LeafletMap } from "leaflet";
-import { useMap } from "react-leaflet"; // ✅ ADD
+import { useMap } from "react-leaflet"; 
 
 const MapContainer = dynamic(() => import("react-leaflet").then((m) => m.MapContainer), {
   ssr: false,
@@ -21,7 +21,7 @@ const API_URL =
 
 type Point = {
   rowId: number;
-  ulp: string; // ✅ kolom C (CXUNI)
+  ulp: string; 
   formattedAddress: string;
   streetAddress: string;
   city: string;
@@ -30,8 +30,8 @@ type Point = {
   longitude: number;
 };
 
-type LatLng = [number, number]; // [lat, lng]
-type Segment = [LatLng, LatLng]; // 1 segmen garis
+type LatLng = [number, number]; 
+type Segment = [LatLng, LatLng]; 
 
 function haversineKmLatLng(a: { lat: number; lng: number }, b: { lat: number; lng: number }) {
   const R = 6371;
@@ -100,13 +100,7 @@ class DSU {
     return true;
   }
 }
-
-/**
- * Build "sebisa mungkin nyambung" per ULP:
- * - tahap 1: MST dari kandidat edge dekat (pakai cutoff sebagai prioritas kedekatan)
- * - tahap 2: kalau masih ada komponen yang putus, di-bridge antar komponen terdekat
- *   supaya tetap nyambung (sesuai request "selagi bisa nyambung, nyambung aja").
- */
+ 
 function buildMSTSegments(points: Point[], cutoffMeters: number, kNearest = 6): Segment[] {
   const n = points.length;
   if (n < 2) return [];

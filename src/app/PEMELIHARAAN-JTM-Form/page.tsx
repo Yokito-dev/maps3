@@ -5,6 +5,7 @@ import { useMemo, useState, ChangeEvent, useEffect } from 'react'
 import Image from 'next/image'
 import { IoArrowBack, IoChevronDown, IoClose, IoLocationSharp } from 'react-icons/io5'
 import { useRouter } from 'next/navigation'
+
 const MapPicker = dynamic(() => import('../components/MapPicker'), { ssr: false })
 
 import bg from '@/app/assets/plnup3/bgnogradient.png'
@@ -25,30 +26,82 @@ const DIEKSEKUSI_LIST: string[] = [
   'PT NUN',
   'PT LAKAWAN',
 ]
+
 const APAYGDILAKUKAN_LIST: string[] = [
-  'Penggantian / Pemasangan Isolator', 'Penggantian / Pemasangan bending wire berisolasi',
-  'Penggantian / Pemasangan Arrester jaring', 'Pemasangan GSW', 'Pemasangan Tombak Petir',
-  'Rekonduktor', 'Perbaikan Andongan', 'Perbaikan Tiang Miring', 'Penggantian JTM Rantas',
-  'Perbaikan SKTM', 'Perbaikan MVTIC', 'PerbaikaN/Pemasangan Jumper', 'Penggantian skun kabel',
-  'Sisip tiang JTM', 'Perbaikan / Pemasangan skur', 'Perbaikan / Pemasangan tupang tarik',
-  'Perbaikan / Pemasangan tupang tekan', 'Penggantian FCO perc', 'Penyesuaian rating fuselink perc',
-  'Pemasangan / Penggantian DS', 'Pemeliharaan LBS Manual', 'Pembetonan pondasi tiang', 'Penggantian / Konsul tiang',
-  'Pemasangan cover Isolator', 'Pemasangan penghalang panjat', 'Perbaikan/Penggantian Arm Tie',
-  'Pemasangan nameplate', 'Pengecatan tiang besi', 'Sambung baru kons percabangan', 'Pemasangan skur Bambu',
+  'Penggantian / Pemasangan Isolator',
+  'Penggantian / Pemasangan bending wire berisolasi',
+  'Penggantian / Pemasangan Arrester jaring',
+  'Pemasangan GSW',
+  'Pemasangan Tombak Petir',
+  'Rekonduktor',
+  'Perbaikan Andongan',
+  'Perbaikan Tiang Miring',
+  'Penggantian JTM Rantas',
+  'Perbaikan SKTM',
+  'Perbaikan MVTIC',
+  'PerbaikaN/Pemasangan Jumper',
+  'Penggantian skun kabel',
+  'Sisip tiang JTM',
+  'Perbaikan / Pemasangan skur',
+  'Perbaikan / Pemasangan tupang tarik',
+  'Perbaikan / Pemasangan tupang tekan',
+  'Penggantian FCO perc',
+  'Penyesuaian rating fuselink perc',
+  'Pemasangan / Penggantian DS',
+  'Pemeliharaan LBS Manual',
+  'Pembetonan pondasi tiang',
+  'Penggantian / Konsul tiang',
+  'Pemasangan cover Isolator',
+  'Pemasangan penghalang panjat',
+  'Perbaikan/Penggantian Arm Tie',
+  'Pemasangan nameplate',
+  'Pengecatan tiang besi',
+  'Sambung baru kons percabangan',
+  'Pemasangan skur Bambu',
 ]
+
 const MENGAPAJTMDIPELIHARA_LIST: string[] = [
-  'Isolator Flashover / Pecah / Retak Rambut', 'Arrester jebol / rawan petir',
-  'GSW rusak / rawan petir', 'Rawan petir', 'Penampang kecil / rawan pohon',
-  'Andongan kendor', 'Tiang miring', 'JTM rantas', 'SKTM Gangguan / Jebol / Rusak',
-  'MVTIC / Jebol / Rusak', 'Hotspot / paralel grup', 'Andongan panjang / penyesuaian',
-  'Skur putus / rusak / tidak ada', 'Tupang tarik putus / rusak / tidak ada',
-  'Tupang tekan jatuh / tidak ada', 'FCO perc rusak / tidak ada',
-  'Fuselink perc tidak sesuai (bypass)', 'DS rusak / tidak ada',
-  'LBS Manual perlu dipelihara', 'Tiang JTM pendek / butuh Row',
-  'Lokasi rawan binatang', 'Traves miring / rusak', 'Arm Tie rusak / miring',
-  'Name plate JTM tidak ada', 'Tiang besi berkarat',
+  'Isolator Flashover / Pecah / Retak Rambut',
+  'Arrester jebol / rawan petir',
+  'GSW rusak / rawan petir',
+  'Rawan petir',
+  'Penampang kecil / rawan pohon',
+  'Andongan kendor',
+  'Tiang miring',
+  'JTM rantas',
+  'SKTM Gangguan / Jebol / Rusak',
+  'MVTIC / Jebol / Rusak',
+  'Hotspot / paralel grup',
+  'Andongan panjang / penyesuaian',
+  'Skur putus / rusak / tidak ada',
+  'Tupang tarik putus / rusak / tidak ada',
+  'Tupang tekan jatuh / tidak ada',
+  'FCO perc rusak / tidak ada',
+  'Fuselink perc tidak sesuai (bypass)',
+  'DS rusak / tidak ada',
+  'LBS Manual perlu dipelihara',
+  'Tiang JTM pendek / butuh Row',
+  'Lokasi rawan binatang',
+  'Traves miring / rusak',
+  'Arm Tie rusak / miring',
+  'Name plate JTM tidak ada',
+  'Tiang besi berkarat',
   'Pengikat isolator rusak / tidak sesuai',
 ]
+
+/* ================= HELPERS ================= */
+
+const fileToBase64 = (file: File) =>
+  new Promise<{ name: string; type: string; data: string }>((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => {
+      const res = reader.result as string
+      const base64 = res.split(',')[1]
+      resolve({ name: file.name, type: file.type || 'application/octet-stream', data: base64 })
+    }
+    reader.onerror = () => reject(reader.error)
+    reader.readAsDataURL(file)
+  })
 
 /* ================= PAGE ================= */
 
@@ -56,14 +109,8 @@ export default function Page() {
   const router = useRouter()
   const [asetRows, setAsetRows] = useState<any[]>([])
 
-  const sheetData = [
-    { up3: 'UP3 MAKASSAR SELATAN', ulp: 'PANAKKUKANG' },
-  ]
-
   const ULP_LIST = useMemo(() => {
-    return Array.from(
-      new Set(asetRows.map(r => r.ulp).filter(Boolean))
-    )
+    return Array.from(new Set(asetRows.map(r => r.ulp).filter(Boolean)))
   }, [asetRows])
 
   const [form, setForm] = useState({
@@ -93,11 +140,10 @@ export default function Page() {
   const [fotoSebelum, setFotoSebelum] = useState<File[]>([])
   const [fotoProses, setFotoProses] = useState<File[]>([])
   const [fotoSesudah, setFotoSesudah] = useState<File[]>([])
-  const [showMap, setShowMap] = useState(false);
+  const [showMap, setShowMap] = useState(false)
 
   const penyulangList = useMemo(() => {
     if (!form.ulp) return []
-
     return Array.from(
       new Set(
         asetRows
@@ -110,7 +156,6 @@ export default function Page() {
 
   const zonaList = useMemo(() => {
     if (!form.penyulang) return []
-
     return Array.from(
       new Set(
         asetRows
@@ -123,7 +168,6 @@ export default function Page() {
 
   const sectionList = useMemo(() => {
     if (!form.zonaProteksi) return []
-
     return Array.from(
       new Set(
         asetRows
@@ -134,82 +178,74 @@ export default function Page() {
     )
   }, [asetRows, form.zonaProteksi])
 
-  const panjangKmsList = useMemo(() => {
-    if (!form.section) return []
-
-    return Array.from(
-      new Set(
-        asetRows
-          .filter(r =>
-            r.ulp === form.ulp &&
-            r.penyulang === form.penyulang &&
-            r.zona === form.zonaProteksi &&
-            r.section === form.section
-          )
-          .map(r => String(r.kms))
-          .filter(Boolean)
-      )
-    )
-  }, [
-    asetRows,
-    form.ulp,
-    form.penyulang,
-    form.zonaProteksi,
-    form.section,
-  ])
-
-  const isFormValid =
-    Object.values(form).every(v => v.trim() !== '') &&
-    fotoSebelum.length >= 2 &&
-    fotoProses.length >= 1 &&
-    fotoSesudah.length >= 2
+  // ✅ TEST MODE: foto boleh kosong (tidak mempengaruhi validasi)
+  const isFormValid = Object.values(form).every(v => String(v).trim() !== '')
 
   /* ================= SUBMIT ================= */
 
   const handleSubmit = async () => {
-    const fd = new FormData()
+    try {
+      // ✅ foto boleh kosong, tapi kalau ada tetap dikirim (dibatasi max 2/1/2 seperti sebelumnya)
+      const payload = {
+        type: 'pemeliharaan',
+        ...form,
+        fotoSebelum: await Promise.all((fotoSebelum || []).slice(0, 2).map(fileToBase64)),
+        fotoProses: await Promise.all((fotoProses || []).slice(0, 1).map(fileToBase64)),
+        fotoSesudah: await Promise.all((fotoSesudah || []).slice(0, 2).map(fileToBase64)),
+      }
 
-    Object.entries(form).forEach(([k, v]) => fd.append(k, v))
+      const res = await fetch(API_URL, {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      })
 
-    fotoSebelum.forEach((f, i) =>
-      fd.append(`fotoSebelum${i + 1}`, f)
-    )
-    fotoProses.forEach((f, i) =>
-      fd.append(`fotoProses${i + 1}`, f)
-    )
-    fotoSesudah.forEach((f, i) =>
-      fd.append(`fotoSesudah${i + 1}`, f)
-    )
+      const json = await res.json().catch(() => null)
+      if (!res.ok || json?.status !== 'success') {
+        alert(`Gagal: ${json?.message || 'Unknown error'}`)
+        return
+      }
 
-    await fetch(API_URL, {
-      method: 'POST',
-      body: fd,
-    })
+      alert('Berhasil dikirim')
 
-    alert('Berhasil dikirim')
+      // reset (optional)
+      setForm(p => ({
+        ...p,
+        ulp: '',
+        penyulang: '',
+        zonaProteksi: '',
+        section: '',
+        panjangKms: '0',
+        alasan: '',
+        pemeliharaan: '',
+        tanggalPemeliharaan: '',
+        dieksekusiOleh: '',
+        jumlahItemMaterial: '0',
+        NilaiTahananIsolasiSesudah: '0',
+        nilaiPertanahan: '0',
+        keterangan: '',
+        koordinat: '',
+      }))
+      setFotoSebelum([])
+      setFotoProses([])
+      setFotoSesudah([])
+      setShowMap(false)
+    } catch (e: any) {
+      alert(`Error submit: ${e?.message || String(e)}`)
+    }
   }
 
   useEffect(() => {
     fetch(API_URL)
       .then(r => r.json())
       .then(res => {
-        setAsetRows(res)
+        setAsetRows(Array.isArray(res) ? res : [])
       })
+      .catch(() => setAsetRows([]))
   }, [])
 
   useEffect(() => {
-
-    // 👉 kalau salah satu belum diisi / di-clear
-    if (
-      !form.ulp ||
-      !form.penyulang ||
-      !form.zonaProteksi ||
-      !form.section
-    ) {
-      setForm(p => ({
-        ...p,
-        panjangKms: '',
-      }))
+    if (!form.ulp || !form.penyulang || !form.zonaProteksi || !form.section) {
+      setForm(p => ({ ...p, panjangKms: '' }))
       return
     }
 
@@ -221,25 +257,11 @@ export default function Page() {
     )
 
     if (row?.kms !== undefined && row?.kms !== null) {
-      setForm(p => ({
-        ...p,
-        panjangKms: String(row.kms),
-      }))
+      setForm(p => ({ ...p, panjangKms: String(row.kms) }))
     } else {
-      // 👉 kalau kombinasi tidak ketemu
-      setForm(p => ({
-        ...p,
-        panjangKms: '',
-      }))
+      setForm(p => ({ ...p, panjangKms: '' }))
     }
-
-  }, [
-    form.ulp,
-    form.penyulang,
-    form.zonaProteksi,
-    form.section,
-    asetRows,
-  ])
+  }, [form.ulp, form.penyulang, form.zonaProteksi, form.section, asetRows])
 
   return (
     <div className="h-screen overflow-hidden font-poppins flex flex-col">
@@ -271,16 +293,14 @@ export default function Page() {
             md:h-[82vh]
             md:rounded-3xl
             md:p-10
-            md:max-w-[1200px]">
-
+            md:max-w-[1200px]
+          "
+        >
           <div className="flex-1 overflow-y-auto pr-4">
-
             {/* FORM UTAMA */}
             <div className="w-full grid grid-cols-1 md:grid-cols-2 gap-x-10 gap-y-6">
-
-              {/* ================= KIRI ================= */}
+              {/* KIRI */}
               <div className="flex flex-col gap-6">
-
                 <Input label="UP3" value={form.up3} readOnly />
 
                 <PopupSelect
@@ -331,7 +351,6 @@ export default function Page() {
                   onClear={() => handleChange('section', '')}
                 />
 
-                {/* PANJANG KMS — auto dari aset + tetap bisa diketik + ada + - */}
                 <NumberStepper
                   label="Panjang Km/s"
                   value={form.panjangKms}
@@ -346,12 +365,10 @@ export default function Page() {
                   onSave={v => handleChange('alasan', v)}
                   onClear={() => handleChange('alasan', '')}
                 />
-
               </div>
 
-              {/* ================= KANAN ================= */}
+              {/* KANAN */}
               <div className="flex flex-col gap-6">
-
                 <PopupSelect
                   label="Apa yang dilakukan?"
                   value={form.pemeliharaan}
@@ -365,9 +382,7 @@ export default function Page() {
                   label="Tanggal Pemeliharaan"
                   type="date"
                   value={form.tanggalPemeliharaan}
-                  onChange={e =>
-                    handleChange('tanggalPemeliharaan', e.target.value)
-                  }
+                  onChange={e => handleChange('tanggalPemeliharaan', e.target.value)}
                 />
 
                 <PopupSelect
@@ -382,33 +397,25 @@ export default function Page() {
                 <NumberStepper
                   label="Jumlah item material"
                   value={form.jumlahItemMaterial}
-                  onChange={v =>
-                    handleChange('jumlahItemMaterial', v)
-                  }
+                  onChange={v => handleChange('jumlahItemMaterial', v)}
                 />
 
                 <NumberStepper
                   label="Nilai Tahanan Isolasi Sesudah"
                   value={form.NilaiTahananIsolasiSesudah}
-                  onChange={v =>
-                    handleChange('NilaiTahananIsolasiSesudah', v)
-                  }
+                  onChange={v => handleChange('NilaiTahananIsolasiSesudah', v)}
                 />
 
                 <NumberStepper
                   label="Nilai Pentanahan Setelah Perbaikan"
                   value={form.nilaiPertanahan}
-                  onChange={v =>
-                    handleChange('nilaiPertanahan', v)
-                  }
+                  onChange={v => handleChange('nilaiPertanahan', v)}
                 />
 
                 <Input
                   label="Keterangan"
                   value={form.keterangan}
-                  onChange={e =>
-                    handleChange('keterangan', e.target.value)
-                  }
+                  onChange={e => handleChange('keterangan', e.target.value)}
                 />
               </div>
             </div>
@@ -422,60 +429,65 @@ export default function Page() {
               <div className="mt-2 relative">
                 <input
                   value={form.koordinat}
-                  onChange={e => handleChange("koordinat", e.target.value)}
+                  onChange={e => handleChange('koordinat', e.target.value)}
                   className="w-full py-3 pl-5 pr-12 border-2 border-[#2FA6DE] rounded-full"
                   placeholder="Klik ikon map untuk memilih lokasi"
                 />
 
-                {/* IKON MAP */}
                 <button
                   type="button"
                   onClick={() => setShowMap(prev => !prev)}
-                  className="absolute right-4 top-1/2 -translate-y-1/2 text-dark">
+                  className="absolute right-4 top-1/2 -translate-y-1/2 text-dark"
+                >
                   <IoLocationSharp size={20} />
                 </button>
               </div>
 
-              {/* MAP LANGSUNG DI BAWAH INPUT */}
               {showMap && (
-                <div
-                  className="mt-4 w-full rounded-xl border border-slate-300 bg-white"
-                  style={{ height: 380 }}
-                >
+                <div className="mt-4 w-full rounded-xl border border-slate-300 bg-white" style={{ height: 380 }}>
                   <div className="w-full h-full">
-                    <MapPicker
-                      koordinat={form.koordinat}
-                      onChange={(v) => handleChange("koordinat", v)}
-                    />
+                    <MapPicker koordinat={form.koordinat} onChange={(v: string) => handleChange('koordinat', v)} />
                   </div>
                 </div>
               )}
             </div>
 
-            {/* FOTO (PALING BAWAH, 3 KOTAK) */}
+            {/* FOTO */}
             <div className="mt-10 grid grid-cols-1 md:grid-cols-3 gap-8">
-              <MultiUploadPreview
-                label="Foto Sebelum"
-                files={fotoSebelum}
-                setFiles={setFotoSebelum}
-              />
-
-              <MultiUploadPreview
-                label="Foto Proses Pekerjaan"
-                files={fotoProses}
-                setFiles={setFotoProses}
-              />
-
-              <MultiUploadPreview
-                label="Foto Sesudah"
-                files={fotoSesudah}
-                setFiles={setFotoSesudah}
-              />
+              <MultiUploadPreview label="Foto Sebelum" files={fotoSebelum} setFiles={setFotoSebelum} />
+              <MultiUploadPreview label="Foto Proses Pekerjaan" files={fotoProses} setFiles={setFotoProses} />
+              <MultiUploadPreview label="Foto Sesudah" files={fotoSesudah} setFiles={setFotoSesudah} />
             </div>
 
             {/* ACTION */}
             <div className="flex gap-4 mt-12 justify-center">
-              <button className="px-12 py-3 bg-red-500 text-white rounded-full">
+              <button
+                type="button"
+                onClick={() => {
+                  setForm(p => ({
+                    ...p,
+                    ulp: '',
+                    penyulang: '',
+                    zonaProteksi: '',
+                    section: '',
+                    panjangKms: '0',
+                    alasan: '',
+                    pemeliharaan: '',
+                    tanggalPemeliharaan: '',
+                    dieksekusiOleh: '',
+                    jumlahItemMaterial: '0',
+                    NilaiTahananIsolasiSesudah: '0',
+                    nilaiPertanahan: '0',
+                    keterangan: '',
+                    koordinat: '',
+                  }))
+                  setFotoSebelum([])
+                  setFotoProses([])
+                  setFotoSesudah([])
+                  setShowMap(false)
+                }}
+                className="px-12 py-3 bg-red-500 text-white rounded-full"
+              >
                 Cancel
               </button>
 
@@ -483,10 +495,9 @@ export default function Page() {
                 type="button"
                 onClick={handleSubmit}
                 disabled={!isFormValid}
-                className={`px-12 py-3 rounded-full text-white ${isFormValid
-                  ? 'bg-[#2FA6DE]'
-                  : 'bg-gray-400 cursor-not-allowed'
-                  }`}
+                className={`px-12 py-3 rounded-full text-white ${
+                  isFormValid ? 'bg-[#2FA6DE]' : 'bg-gray-400 cursor-not-allowed'
+                }`}
               >
                 Submit
               </button>
@@ -543,22 +554,22 @@ function NumberStepper({ label, value, onChange }: NumberStepperProps) {
   )
 }
 
-/* =========== MULTI UPLOAD (DESAIN TETAP 1 KOTAK) =========== */
-
 type MultiUploadPreviewProps = {
   label: string
   files: File[]
   setFiles: (f: File[]) => void
 }
 
-function MultiUploadPreview({
-  label,
-  files,
-  setFiles,
-}: MultiUploadPreviewProps) {
+function MultiUploadPreview({ label, files, setFiles }: MultiUploadPreviewProps) {
   const [open, setOpen] = useState<number | null>(null)
 
-  const previews = files.map(f => URL.createObjectURL(f))
+  const previews = useMemo(() => files.map(f => URL.createObjectURL(f)), [files])
+
+  useEffect(() => {
+    return () => {
+      previews.forEach(u => URL.revokeObjectURL(u))
+    }
+  }, [previews])
 
   return (
     <>
@@ -568,20 +579,19 @@ function MultiUploadPreview({
         </label>
 
         <div className="relative mt-2 h-[220px] border-2 border-dashed border-[#2FA6DE] rounded-2xl flex flex-wrap items-center justify-center gap-2 p-2">
-
           {previews.map((src, i) => (
             <div key={i} className="relative h-20 w-20">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
                 src={src}
                 className="h-full w-full object-cover rounded cursor-pointer"
                 onClick={() => setOpen(i)}
+                alt={`preview-${i}`}
               />
 
               <button
                 type="button"
-                onClick={() =>
-                  setFiles(files.filter((_, x) => x !== i))
-                }
+                onClick={() => setFiles(files.filter((_, x) => x !== i))}
                 className="absolute -top-2 -right-2 bg-red-500 text-white w-6 h-6 rounded-full flex items-center justify-center"
               >
                 <IoClose size={12} />
@@ -610,17 +620,13 @@ function MultiUploadPreview({
           onClick={() => setOpen(null)}
           className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center"
         >
-          <img
-            src={previews[open]}
-            className="max-w-[90vw] max-h-[90vh] rounded-xl"
-          />
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={previews[open]} className="max-w-[90vw] max-h-[90vh] rounded-xl" alt="preview-large" />
         </div>
       )}
     </>
   )
 }
-
-/* ================= POPUP SELECT ================= */
 
 type PopupSelectProps = {
   label: string
@@ -629,7 +635,7 @@ type PopupSelectProps = {
   onSave: (value: string) => void
   onClear: () => void
   disabled?: boolean
-  searchable?: boolean   // ⬅️ TAMBAH
+  searchable?: boolean
 }
 
 function PopupSelect({
@@ -639,16 +645,15 @@ function PopupSelect({
   onSave,
   onClear,
   disabled = false,
-  searchable = false,   // ⬅️ default OFF
+  searchable = false,
 }: PopupSelectProps) {
   const [open, setOpen] = useState(false)
   const [search, setSearch] = useState('')
 
-  const filtered = searchable
-    ? options.filter(o =>
-      o.toLowerCase().includes(search.toLowerCase())
-    )
-    : options
+  const filtered = useMemo(() => {
+    if (!searchable) return options
+    return options.filter(o => o.toLowerCase().includes(search.toLowerCase()))
+  }, [options, search, searchable])
 
   return (
     <>
@@ -659,14 +664,12 @@ function PopupSelect({
         <label className="text-sm font-semibold">
           {label} <span className="text-red-500">*</span>
         </label>
-        <div className={`mt-2 px-5 py-3 rounded-full flex items-center justify-between border-2 transition
-        ${value
-              ? 'border-[#2FA6DE] bg-[#2FA6DE]/5'
-              : 'border-[#2FA6DE]'
-            } hover:bg-[#2FA6DE]/5`}>
-          <span className={value ? '' : 'text-gray-400'}>
-            {value || `Pilih ${label}`}
-          </span>
+        <div
+          className={`mt-2 px-5 py-3 rounded-full flex items-center justify-between border-2 transition
+          ${value ? 'border-[#2FA6DE] bg-[#2FA6DE]/5' : 'border-[#2FA6DE]'}
+          hover:bg-[#2FA6DE]/5`}
+        >
+          <span className={value ? '' : 'text-gray-400'}>{value || `Pilih ${label}`}</span>
           <IoChevronDown />
         </div>
       </div>
@@ -694,7 +697,6 @@ function PopupSelect({
             <div className="overflow-y-auto flex-1">
               {filtered.map(o => {
                 const selected = o === value
-
                 return (
                   <div
                     key={o}
@@ -703,10 +705,10 @@ function PopupSelect({
                       setOpen(false)
                       setSearch('')
                     }}
-                    className={`py-2 px-3 rounded-lg cursor-pointer
-                      ${selected
-                        ? 'bg-[#E8F5FB]  text-blue-600 font-semibold'
-                        : 'hover:bg-gray-100'}`}>
+                    className={`py-2 px-3 rounded-lg cursor-pointer ${
+                      selected ? 'bg-[#E8F5FB] text-blue-600 font-semibold' : 'hover:bg-gray-100'
+                    }`}
+                  >
                     {o}
                   </div>
                 )
@@ -730,8 +732,6 @@ function PopupSelect({
   )
 }
 
-/* ================= INPUT ================= */
-
 type InputProps = {
   label: string
   value: string
@@ -740,13 +740,7 @@ type InputProps = {
   onChange?: (e: ChangeEvent<HTMLInputElement>) => void
 }
 
-function Input({
-  label,
-  value,
-  type = 'text',
-  onChange,
-  readOnly = false,
-}: InputProps) {
+function Input({ label, value, type = 'text', onChange, readOnly = false }: InputProps) {
   const isDateEmpty = type === 'date' && !value
 
   return (
@@ -761,8 +755,7 @@ function Input({
         onChange={onChange}
         className={`mt-2 w-full py-3 px-5 border-2 border-[#2FA6DE] rounded-full
           ${readOnly ? 'bg-gray-100' : ''}
-          ${isDateEmpty ? 'text-gray-400' : 'text-black'}
-        `}
+          ${isDateEmpty ? 'text-gray-400' : 'text-black'}`}
       />
     </div>
   )

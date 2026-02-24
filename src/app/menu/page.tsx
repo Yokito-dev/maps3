@@ -58,7 +58,7 @@ export default function Page() {
         { id: 6, title: "Hasil Inspeksi GH GB MC", link: "/HASIL-INSPEKSI-GH-GB-MC-Form", image: hslinpksighgbmc },
         { id: 7, title: "Pemeliharaan GH GB MC", link: "/PEMELIHARAAN-GH-GB-MC-Form", image: pmlihraanghgbmc },
         { id: 8, title: "Pemeliharaan GT", link: "/pemeliharaan-gt", image: pmlihraangt },
-        { id: 9, title: "Pemeliharaan JTM", link: "/PEMELIHARAAN-JTM-Form", image: pmlihraanjtm },
+        { id: 9, title: "Pemeliharaan JTM", link: "/pemeliharaan-jtm", image: pmlihraanjtm },
     ];
 
     const filteredMenus = dashboardMenus.filter(item =>
