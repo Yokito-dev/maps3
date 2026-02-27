@@ -6,10 +6,10 @@ import Image from 'next/image'
 import { IoArrowBack, IoChevronDown, IoClose, IoLocationSharp } from 'react-icons/io5'
 import { useRouter } from 'next/navigation'
 
-const MapPicker = dynamic(() => import('../components/MapPicker'), { ssr: false })
-
 import bg from '@/app/assets/plnup3/bgnogradient.png'
 import plnKecil from '@/app/assets/plnup3/plnkecil.svg'
+
+const MapPicker = dynamic(() => import('../components/MapPicker'), { ssr: false })
 
 const API_URL =
   'https://script.google.com/macros/s/AKfycbyCxXZWyPBCJsyuLZpeynkr6V5FGCsLZopQaUQTPRIMKA6vpXriueq26O1n-SrsK_ALfA/exec'
@@ -178,14 +178,12 @@ export default function Page() {
     )
   }, [asetRows, form.zonaProteksi])
 
-  // ✅ TEST MODE: foto boleh kosong (tidak mempengaruhi validasi)
   const isFormValid = Object.values(form).every(v => String(v).trim() !== '')
 
   /* ================= SUBMIT ================= */
 
   const handleSubmit = async () => {
     try {
-      // ✅ foto boleh kosong, tapi kalau ada tetap dikirim (dibatasi max 2/1/2 seperti sebelumnya)
       const payload = {
         type: 'pemeliharaan',
         ...form,
@@ -207,7 +205,6 @@ export default function Page() {
 
       alert('Berhasil dikirim')
 
-      // reset (optional)
       setForm(p => ({
         ...p,
         ulp: '',
@@ -249,11 +246,12 @@ export default function Page() {
       return
     }
 
-    const row = asetRows.find(r =>
-      String(r.ulp).trim() === form.ulp.trim() &&
-      String(r.penyulang).trim() === form.penyulang.trim() &&
-      String(r.zona).trim() === form.zonaProteksi.trim() &&
-      String(r.section).trim() === form.section.trim()
+    const row = asetRows.find(
+      r =>
+        String(r.ulp).trim() === form.ulp.trim() &&
+        String(r.penyulang).trim() === form.penyulang.trim() &&
+        String(r.zona).trim() === form.zonaProteksi.trim() &&
+        String(r.section).trim() === form.section.trim()
     )
 
     if (row?.kms !== undefined && row?.kms !== null) {
@@ -265,13 +263,11 @@ export default function Page() {
 
   return (
     <div className="h-screen overflow-hidden font-poppins flex flex-col">
-      {/* BACKGROUND */}
       <div className="fixed inset-0 -z-10">
         <Image src={bg} alt="Background" fill className="object-cover" priority />
       </div>
       <div className="fixed inset-0 -z-10 bg-gradient-to-t from-[#165F67]/70 via-[#67C2E9]/30 to-transparent backdrop-blur-sm" />
 
-      {/* HEADER */}
       <div className="px-4 pt-3">
         <div className="bg-white rounded-full shadow px-6 py-2 flex items-center gap-3">
           <button onClick={() => router.push('/menu')}>
@@ -282,7 +278,6 @@ export default function Page() {
         </div>
       </div>
 
-      {/* CONTENT */}
       <main className="flex-1 flex justify-center items-start px-0 pt-4 md:p-4 overflow-hidden">
         <div
           className="
@@ -297,9 +292,7 @@ export default function Page() {
           "
         >
           <div className="flex-1 overflow-y-auto pr-4">
-            {/* FORM UTAMA */}
             <div className="w-full grid grid-cols-1 md:grid-cols-2 gap-x-10 gap-y-6">
-              {/* KIRI */}
               <div className="flex flex-col gap-6">
                 <Input label="UP3" value={form.up3} readOnly />
 
@@ -351,11 +344,7 @@ export default function Page() {
                   onClear={() => handleChange('section', '')}
                 />
 
-                <NumberStepper
-                  label="Panjang Km/s"
-                  value={form.panjangKms}
-                  onChange={v => handleChange('panjangKms', v)}
-                />
+                <NumberStepper label="Panjang Km/s" value={form.panjangKms} onChange={v => handleChange('panjangKms', v)} />
 
                 <PopupSelect
                   label="Mengapa JTM dipelihara?"
@@ -367,7 +356,6 @@ export default function Page() {
                 />
               </div>
 
-              {/* KANAN */}
               <div className="flex flex-col gap-6">
                 <PopupSelect
                   label="Apa yang dilakukan?"
@@ -412,15 +400,10 @@ export default function Page() {
                   onChange={v => handleChange('nilaiPertanahan', v)}
                 />
 
-                <Input
-                  label="Keterangan"
-                  value={form.keterangan}
-                  onChange={e => handleChange('keterangan', e.target.value)}
-                />
+                <Input label="Keterangan" value={form.keterangan} onChange={e => handleChange('keterangan', e.target.value)} />
               </div>
             </div>
 
-            {/* KOORDINAT */}
             <div className="mt-10 w-full">
               <label className="text-sm font-semibold">
                 Koordinat <span className="text-red-500">*</span>
@@ -452,14 +435,12 @@ export default function Page() {
               )}
             </div>
 
-            {/* FOTO */}
             <div className="mt-10 grid grid-cols-1 md:grid-cols-3 gap-8">
               <MultiUploadPreview label="Foto Sebelum" files={fotoSebelum} setFiles={setFotoSebelum} />
               <MultiUploadPreview label="Foto Proses Pekerjaan" files={fotoProses} setFiles={setFotoProses} />
               <MultiUploadPreview label="Foto Sesudah" files={fotoSesudah} setFiles={setFotoSesudah} />
             </div>
 
-            {/* ACTION */}
             <div className="flex gap-4 mt-12 justify-center">
               <button
                 type="button"
@@ -542,11 +523,7 @@ function NumberStepper({ label, value, onChange }: NumberStepperProps) {
           −
         </button>
 
-        <button
-          type="button"
-          onClick={() => onChange(String(num + 1))}
-          className="w-12 h-12 border rounded-full text-xl"
-        >
+        <button type="button" onClick={() => onChange(String(num + 1))} className="w-12 h-12 border rounded-full text-xl">
           +
         </button>
       </div>
@@ -616,10 +593,7 @@ function MultiUploadPreview({ label, files, setFiles }: MultiUploadPreviewProps)
       </div>
 
       {open !== null && previews[open] && (
-        <div
-          onClick={() => setOpen(null)}
-          className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center"
-        >
+        <div onClick={() => setOpen(null)} className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src={previews[open]} className="max-w-[90vw] max-h-[90vh] rounded-xl" alt="preview-large" />
         </div>
@@ -638,15 +612,7 @@ type PopupSelectProps = {
   searchable?: boolean
 }
 
-function PopupSelect({
-  label,
-  value,
-  options,
-  onSave,
-  onClear,
-  disabled = false,
-  searchable = false,
-}: PopupSelectProps) {
+function PopupSelect({ label, value, options, onSave, onClear, disabled = false, searchable = false }: PopupSelectProps) {
   const [open, setOpen] = useState(false)
   const [search, setSearch] = useState('')
 
@@ -657,10 +623,7 @@ function PopupSelect({
 
   return (
     <>
-      <div
-        onClick={() => !disabled && setOpen(true)}
-        className={`cursor-pointer ${disabled ? 'opacity-50 pointer-events-none' : ''}`}
-      >
+      <div onClick={() => !disabled && setOpen(true)} className={`cursor-pointer ${disabled ? 'opacity-50 pointer-events-none' : ''}`}>
         <label className="text-sm font-semibold">
           {label} <span className="text-red-500">*</span>
         </label>
@@ -675,14 +638,8 @@ function PopupSelect({
       </div>
 
       {open && (
-        <div
-          onClick={() => setOpen(false)}
-          className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center"
-        >
-          <div
-            onClick={e => e.stopPropagation()}
-            className="bg-white p-6 rounded-xl w-[700px] max-h-[75vh] flex flex-col"
-          >
+        <div onClick={() => setOpen(false)} className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center">
+          <div onClick={e => e.stopPropagation()} className="bg-white p-6 rounded-xl w-[700px] max-h-[75vh] flex flex-col">
             <h2 className="font-bold mb-3">{label}</h2>
 
             {searchable && (
@@ -705,9 +662,7 @@ function PopupSelect({
                       setOpen(false)
                       setSearch('')
                     }}
-                    className={`py-2 px-3 rounded-lg cursor-pointer ${
-                      selected ? 'bg-[#E8F5FB] text-blue-600 font-semibold' : 'hover:bg-gray-100'
-                    }`}
+                    className={`py-2 px-3 rounded-lg cursor-pointer ${selected ? 'bg-[#E8F5FB] text-blue-600 font-semibold' : 'hover:bg-gray-100'}`}
                   >
                     {o}
                   </div>

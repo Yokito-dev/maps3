@@ -1,14 +1,19 @@
 'use client'
 
+import dynamic from 'next/dynamic'
 import { useMemo, useState, ChangeEvent, useEffect } from 'react'
 import Image from 'next/image'
-import { IoArrowBack, IoChevronDown, IoClose, IoAdd } from 'react-icons/io5'
+import { IoArrowBack, IoChevronDown, IoClose, IoAdd, IoLocationSharp } from 'react-icons/io5'
 import { useRouter } from 'next/navigation'
 
 import bg from '@/app/assets/plnup3/bgnogradient.png'
 import plnKecil from '@/app/assets/plnup3/plnkecil.svg'
 
-/* ================= API (1 URL) ================= */
+/* ================= MAP (client only) ================= */
+
+const MapPicker = dynamic(() => import('../components/MapPicker'), { ssr: false }),
+
+/* ================= API ================= */
 
 const API_URL =
   'https://script.google.com/macros/s/AKfycbyOI9u0Gi7byOWbF5NhIgf3BUSHahtj8y6Bmz0NezhzMNiHdioI1nef7JqWZ31fsw9AbQ/exec'
@@ -40,8 +45,8 @@ type FormState = {
   section: string
   penyulang: string
 
-  alasan: string[] // MULTI
-  pemeliharaan: string[] // MULTI
+  alasan: string[]
+  pemeliharaan: string[]
 
   dieksekusiOleh: string
   jumlahItemMaterial: string
@@ -84,7 +89,6 @@ const MENGAPA_GARDU_DIPELIHARA_OPTIONS = [
   'PIPA KABEL TIDAK ADA/RUSAK',
 ]
 
-// ✅ FIX: sesuai screenshot kamu
 const DIEKSEKUSI_OLEH_OPTIONS = [
   'TIM PDKB',
   'TIM HAR UP3',
@@ -101,6 +105,26 @@ const DIEKSEKUSI_OLEH_OPTIONS = [
 /* ================= HELPERS ================= */
 
 const norm = (v: any) => String(v ?? '').trim().toUpperCase()
+
+const uniquePretty = (arr: any[]) => {
+  const m = new Map<string, string>()
+  for (const v of arr) {
+    const raw = String(v ?? '').trim()
+    const k = norm(raw)
+    if (k && !m.has(k)) m.set(k, raw)
+  }
+  return Array.from(m.values()).sort()
+}
+
+const pickUnique = (vals: string[]) => {
+  const u = uniquePretty(vals)
+  return u.length === 1 ? u[0] : ''
+}
+
+const fmtCoord = (n: number) => {
+  if (!Number.isFinite(n)) return ''
+  return n.toFixed(6)
+}
 
 const fileToBase64Payload = (file: File) =>
   new Promise<ImagePayload>((resolve, reject) => {
@@ -123,7 +147,7 @@ const fileToBase64Payload = (file: File) =>
 export default function Page() {
   const router = useRouter()
 
-  // ✅ FIX Hydration mismatch: render only after mounted (avoid SSR HTML mismatch)
+  // ✅ avoid SSR/client mismatch
   const [mounted, setMounted] = useState(false)
   useEffect(() => setMounted(true), [])
 
@@ -140,7 +164,7 @@ export default function Page() {
     window.setTimeout(() => setToast(p => ({ ...p, open: false })), 4500)
   }
 
-  /* ========= FETCH ASET GD ========= */
+  /* ========= FETCH ASET ========= */
 
   const [aset, setAset] = useState<AsetGdRow[]>([])
   const [asetLoading, setAsetLoading] = useState(false)
@@ -152,10 +176,18 @@ export default function Page() {
         setAsetLoading(true)
         setAsetError('')
 
-        const res = await fetch(`${API_URL}?type=aset`, { method: 'GET' })
-        const json = (await res.json()) as { data?: AsetGdRow[]; error?: boolean; message?: string }
+        const res = await fetch(`${API_URL}?type=aset&_=${Date.now()}`, {
+          method: 'GET',
+          cache: 'no-store',
+        })
+        const json = (await res.json()) as {
+          data?: AsetGdRow[]
+          ok?: boolean
+          error?: boolean
+          message?: string
+        }
 
-        if (!res.ok || json?.error) throw new Error(json?.message || `HTTP ${res.status}`)
+        if (!res.ok || json?.error || json?.ok === false) throw new Error(json?.message || `HTTP ${res.status}`)
 
         setAset(Array.isArray(json.data) ? json.data : [])
       } catch (e: any) {
@@ -195,112 +227,188 @@ export default function Page() {
     setForm(p => ({ ...p, [key]: val }))
   }
 
-  /* ========= DERIVED LISTS ========= */
+  /* ========= MAP: icon only, when opened => LIVE by default =========
+     - Autofill longlat from DB still happens on namaGardu change
+     - But user can always edit longlat (input + map)
+     - When map opens => starts live GPS and updates longlat
+     - If user edits or taps map => stop live (so it won't overwrite manual choice)
+  */
 
-  const ULP_LIST = useMemo(() => {
-    const s = new Set(
-      aset
-        .filter(a => norm(a.up3) === norm(form.up3))
-        .map(a => String(a.ulp || '').trim())
-        .filter(Boolean)
-    )
-    return Array.from(s).sort()
-  }, [aset, form.up3])
+  const [showMap, setShowMap] = useState(false)
+  const [tracking, setTracking] = useState(false)
+  const [geoError, setGeoError] = useState('')
 
-  const NAMA_GARDU_LIST = useMemo(() => {
-    const s = new Set(
-      aset
-        .filter(a => norm(a.up3) === norm(form.up3) && norm(a.ulp) === norm(form.ulp))
-        .map(a => String(a.namaGardu || '').trim())
-        .filter(Boolean)
-    )
-    return Array.from(s).sort()
-  }, [aset, form.up3, form.ulp])
+  const openMapLive = () => {
+    setShowMap(true)
+    setGeoError('')
+    setTracking(true) // ✅ live by default when opened
+  }
 
-  const PENYULANG_LIST = useMemo(() => {
-    const s = new Set(
-      aset
-        .filter(
-          a =>
-            norm(a.up3) === norm(form.up3) &&
-            norm(a.ulp) === norm(form.ulp) &&
-            norm(a.namaGardu) === norm(form.namaGardu)
-        )
-        .map(a => String(a.penyulang || '').trim())
-        .filter(Boolean)
-    )
-    return Array.from(s).sort()
-  }, [aset, form.up3, form.ulp, form.namaGardu])
-
-  const ZONA_LIST = useMemo(() => {
-    const s = new Set(
-      aset
-        .filter(
-          a =>
-            norm(a.up3) === norm(form.up3) &&
-            norm(a.ulp) === norm(form.ulp) &&
-            norm(a.namaGardu) === norm(form.namaGardu)
-        )
-        .map(a => String(a.zona || '').trim())
-        .filter(Boolean)
-    )
-    return Array.from(s).sort()
-  }, [aset, form.up3, form.ulp, form.namaGardu])
-
-  const SECTION_LIST = useMemo(() => {
-    const s = new Set(
-      aset
-        .filter(
-          a =>
-            norm(a.up3) === norm(form.up3) &&
-            norm(a.ulp) === norm(form.ulp) &&
-            norm(a.namaGardu) === norm(form.namaGardu)
-        )
-        .map(a => String(a.section || '').trim())
-        .filter(Boolean)
-    )
-    return Array.from(s).sort()
-  }, [aset, form.up3, form.ulp, form.namaGardu])
-
-  /* ========= AUTOFILL FROM ASET WHEN NAMA GARDU CHANGES ========= */
+  const closeMap = () => {
+    setShowMap(false)
+    setTracking(false)
+    setGeoError('')
+  }
 
   useEffect(() => {
-    if (!form.namaGardu) return
+    if (!tracking) return
 
-    const row = aset.find(
-      a =>
-        norm(a.up3) === norm(form.up3) &&
-        norm(a.ulp) === norm(form.ulp) &&
-        norm(a.namaGardu) === norm(form.namaGardu)
+    if (typeof window === 'undefined' || !navigator.geolocation) {
+      setGeoError('Perangkat tidak mendukung GPS (Geolocation).')
+      setTracking(false)
+      return
+    }
+
+    const id = navigator.geolocation.watchPosition(
+      pos => {
+        const lat = fmtCoord(pos.coords.latitude)
+        const lng = fmtCoord(pos.coords.longitude)
+        const v = lat && lng ? `${lat},${lng}` : ''
+        if (v) setForm(p => ({ ...p, longlat: v }))
+      },
+      err => {
+        setGeoError(err?.message || 'Gagal mengambil lokasi GPS.')
+        setTracking(false)
+      },
+      { enableHighAccuracy: true, maximumAge: 3000, timeout: 15000 }
     )
-    if (!row) return
 
-    setForm(prev => ({
-      ...prev,
-      longlat: row.longlat || '',
-      kapasitas: row.kapasitas || prev.kapasitas || '0',
-      fasa: row.fasa || '',
-      zona: row.zona || '',
-      section: row.section || '',
-      penyulang: row.penyulang || '',
-    }))
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [form.namaGardu, aset])
+    return () => navigator.geolocation.clearWatch(id)
+  }, [tracking])
 
-  /* ========= CLEAR DEPENDENCIES WHEN ULP CHANGES ========= */
+  /* ========= BASE ROWS ========= */
 
+  const baseUp3Rows = useMemo(() => aset.filter(a => norm(a.up3) === norm(form.up3)), [aset, form.up3])
+
+  /* ========= ALWAYS SHOW OPTIONS (penyulang/zona/section always ALL) ========= */
+
+  const ULP_LIST = useMemo(() => uniquePretty(baseUp3Rows.map(a => a.ulp)), [baseUp3Rows])
+
+  const NAMA_GARDU_LIST = useMemo(() => {
+    const all = uniquePretty(baseUp3Rows.map(a => a.namaGardu))
+    if (!form.ulp) return all
+    const filtered = uniquePretty(baseUp3Rows.filter(a => norm(a.ulp) === norm(form.ulp)).map(a => a.namaGardu))
+    return filtered.length ? filtered : all
+  }, [baseUp3Rows, form.ulp])
+
+  const ALL_PENYULANG_LIST = useMemo(() => uniquePretty(baseUp3Rows.map(a => a.penyulang)), [baseUp3Rows])
+  const PENYULANG_LIST = useMemo(() => ALL_PENYULANG_LIST, [ALL_PENYULANG_LIST])
+
+  const ALL_ZONA_LIST = useMemo(() => uniquePretty(baseUp3Rows.map(a => a.zona)), [baseUp3Rows])
+  const ZONA_LIST = useMemo(() => ALL_ZONA_LIST, [ALL_ZONA_LIST])
+
+  const ALL_SECTION_LIST = useMemo(() => uniquePretty(baseUp3Rows.map(a => a.section)), [baseUp3Rows])
+  const SECTION_LIST = useMemo(() => ALL_SECTION_LIST, [ALL_SECTION_LIST])
+
+  /* ========= PAIRING AUTOFILL ========= */
+
+  // ULP changes => reset
   useEffect(() => {
     setForm(prev => ({
       ...prev,
       namaGardu: '',
       longlat: '',
       fasa: '',
+      penyulang: '',
       zona: '',
       section: '',
-      penyulang: '',
     }))
+    closeMap()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [form.ulp])
+
+  // namaGardu changes => autofill fields including longlat (still editable)
+  useEffect(() => {
+    if (!form.namaGardu) return
+
+    const rowsForGardu = baseUp3Rows.filter(a => {
+      if (form.ulp && norm(a.ulp) !== norm(form.ulp)) return false
+      return norm(a.namaGardu) === norm(form.namaGardu)
+    })
+
+    const row0 = rowsForGardu[0]
+    const uniqueP = pickUnique(rowsForGardu.map(r => r.penyulang))
+    const uniqueZ = pickUnique(rowsForGardu.map(r => r.zona))
+    const uniqueS = pickUnique(rowsForGardu.map(r => r.section))
+
+    setForm(prev => {
+      let nextP = prev.penyulang
+      if (nextP && !ALL_PENYULANG_LIST.some(o => norm(o) === norm(nextP))) nextP = ''
+      if (!nextP && uniqueP) nextP = uniqueP
+
+      return {
+        ...prev,
+        longlat: row0?.longlat || '', // ✅ AUTOFILL even though editable
+        kapasitas: row0?.kapasitas || prev.kapasitas || '0',
+        fasa: row0?.fasa || '',
+        penyulang: nextP,
+        zona: uniqueZ || '',
+        section: uniqueS || '',
+      }
+    })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [form.namaGardu, form.ulp, baseUp3Rows, ALL_PENYULANG_LIST])
+
+  // penyulang changes => autofill zona/section if unique
+  useEffect(() => {
+    if (!form.penyulang) return
+
+    const rowsForP = baseUp3Rows.filter(a => {
+      if (form.ulp && norm(a.ulp) !== norm(form.ulp)) return false
+      return norm(a.penyulang) === norm(form.penyulang)
+    })
+
+    const uniqueG = !form.namaGardu ? pickUnique(rowsForP.map(r => r.namaGardu)) : ''
+    const uniqueZ = pickUnique(rowsForP.map(r => r.zona))
+    const uniqueS = pickUnique(rowsForP.map(r => r.section))
+
+    setForm(prev => ({
+      ...prev,
+      zona: uniqueZ || '',
+      section: uniqueS || '',
+    }))
+
+    if (uniqueG) handleChange('namaGardu', uniqueG)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [form.penyulang])
+
+  // zona changes => autofill section if unique
+  useEffect(() => {
+    if (!form.zona) return
+
+    const rowsForZ = baseUp3Rows.filter(a => {
+      if (form.ulp && norm(a.ulp) !== norm(form.ulp)) return false
+      if (form.namaGardu && norm(a.namaGardu) !== norm(form.namaGardu)) return false
+      if (form.penyulang && norm(a.penyulang) !== norm(form.penyulang)) return false
+      return norm(a.zona) === norm(form.zona)
+    })
+
+    const uniqueS = pickUnique(rowsForZ.map(r => r.section))
+    setForm(prev => ({ ...prev, section: uniqueS || prev.section }))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [form.zona])
+
+  // Clear ghost values after refresh
+  useEffect(() => {
+    if (form.penyulang && !ALL_PENYULANG_LIST.some(o => norm(o) === norm(form.penyulang))) {
+      setForm(prev => ({ ...prev, penyulang: '' }))
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ALL_PENYULANG_LIST])
+
+  useEffect(() => {
+    if (form.zona && !ALL_ZONA_LIST.some(o => norm(o) === norm(form.zona))) {
+      setForm(prev => ({ ...prev, zona: '' }))
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ALL_ZONA_LIST])
+
+  useEffect(() => {
+    if (form.section && !ALL_SECTION_LIST.some(o => norm(o) === norm(form.section))) {
+      setForm(prev => ({ ...prev, section: '' }))
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ALL_SECTION_LIST])
 
   /* ================= FOTO ================= */
 
@@ -325,6 +433,7 @@ export default function Page() {
     isNonEmpty(form.penyulang) &&
     isNonEmpty(form.zona) &&
     isNonEmpty(form.section) &&
+    isNonEmpty(form.longlat) && // ✅ required, user can adjust
     isNonEmpty(form.pemeliharaan) &&
     isNonEmpty(form.alasan) &&
     isNonEmpty(form.dieksekusiOleh) &&
@@ -382,7 +491,6 @@ export default function Page() {
 
       const res = await fetch(API_URL, {
         method: 'POST',
-        // ✅ avoid preflight
         headers: { 'Content-Type': 'text/plain;charset=utf-8' },
         body: JSON.stringify(payload),
       })
@@ -395,17 +503,9 @@ export default function Page() {
 
       const warnings = Array.isArray(json?.warnings) ? json.warnings : []
       if (warnings.length) {
-        showToast({
-          variant: 'warning',
-          title: 'Tersimpan, tapi ada catatan',
-          message: warnings.join(' • '),
-        })
+        showToast({ variant: 'warning', title: 'Tersimpan, tapi ada catatan', message: warnings.join(' • ') })
       } else {
-        showToast({
-          variant: 'success',
-          title: 'Berhasil ✅',
-          message: 'Data sudah masuk ke PEMELIHARAAN GT',
-        })
+        showToast({ variant: 'success', title: 'Berhasil ✅', message: 'Data sudah masuk ke PEMELIHARAAN GT' })
       }
 
       // reset
@@ -429,12 +529,9 @@ export default function Page() {
       setFotoProses(null)
       setFotoSesudah(null)
       setFotoLampiranBA(null)
+      closeMap()
     } catch (e: any) {
-      showToast({
-        variant: 'error',
-        title: 'Gagal ❌',
-        message: e?.message || 'Submit gagal',
-      })
+      showToast({ variant: 'error', title: 'Gagal ❌', message: e?.message || 'Submit gagal' })
     } finally {
       setSubmitting(false)
     }
@@ -461,6 +558,7 @@ export default function Page() {
     setFotoProses(null)
     setFotoSesudah(null)
     setFotoLampiranBA(null)
+    closeMap()
     showToast({ variant: 'info', title: 'Dibatalkan', message: 'Form direset' })
   }
 
@@ -514,12 +612,11 @@ export default function Page() {
               {!asetLoading && asetError && (
                 <div className="text-sm text-red-600">
                   Error fetch ASET: {asetError}{' '}
-                  <span className="text-gray-500">(ULP tetap bisa dipilih/manual)</span>
+                  <span className="text-gray-500">(dropdown tetap tampil semua opsi)</span>
                 </div>
               )}
             </div>
 
-            {/* FORM */}
             <div className="w-full grid grid-cols-1 md:grid-cols-2 gap-x-10 gap-y-6">
               <Input label="UP3" value={form.up3} readOnly />
 
@@ -574,7 +671,8 @@ export default function Page() {
                 label="Penyulang"
                 value={form.penyulang}
                 options={PENYULANG_LIST}
-                disabled={!form.namaGardu}
+                disabled={!form.ulp}
+                searchable
                 onSave={v => handleChange('penyulang', v)}
                 onClear={() => handleChange('penyulang', '')}
               />
@@ -593,7 +691,8 @@ export default function Page() {
                 label="Zona Proteksi"
                 value={form.zona}
                 options={ZONA_LIST}
-                disabled={!form.namaGardu}
+                disabled={!form.ulp}
+                searchable
                 onSave={v => handleChange('zona', v)}
                 onClear={() => handleChange('zona', '')}
               />
@@ -609,19 +708,70 @@ export default function Page() {
                 value={form.section}
                 options={SECTION_LIST}
                 searchable
-                disabled={!form.namaGardu}
+                disabled={!form.ulp}
                 onSave={v => handleChange('section', v)}
                 onClear={() => handleChange('section', '')}
               />
 
-              <NumberStepper
-                label="Kapasitas"
-                value={form.kapasitas}
-                onChange={v => handleChange('kapasitas', v)}
-              />
+              <NumberStepper label="Kapasitas" value={form.kapasitas} onChange={v => handleChange('kapasitas', v)} />
 
+              {/* LONG/LAT editable + icon */}
               <div className="md:col-span-2">
-                <LongLatSplit label="LONG / LAT" value={form.longlat} />
+                <label className="text-sm font-semibold">
+                  LONG / LAT <span className="text-red-500">*</span>
+                </label>
+
+                <div className="mt-2">
+                  <div className="relative">
+                    <input
+                      value={form.longlat}
+                      onChange={e => {
+                        // user manual change -> stop live so it doesn't overwrite
+                        if (tracking) setTracking(false)
+                        handleChange('longlat', e.target.value)
+                      }}
+                      className="w-full py-3 pl-5 pr-12 border-2 border-[#2FA6DE] rounded-full"
+                      placeholder="Contoh: -5.123456,119.123456"
+                      autoComplete="off"
+                    />
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (showMap) closeMap()
+                        else openMapLive()
+                      }}
+                      className="absolute right-4 top-1/2 -translate-y-1/2 text-dark"
+                      title={showMap ? 'Tutup Map' : 'Buka Map (Live)'}
+                    >
+                      <IoLocationSharp size={20} />
+                    </button>
+                  </div>
+
+                  {geoError && <div className="mt-2 text-xs text-red-600">{geoError}</div>}
+
+                  {showMap && (
+                    <div className="mt-3 w-full rounded-xl border border-slate-300 bg-white" style={{ height: 380 }}>
+                      <div className="w-full h-full">
+                        <MapPicker
+                          koordinat={form.longlat}
+                          onChange={(v: string) => {
+                            // user picks on map -> stop live so selection stays
+                            if (tracking) setTracking(false)
+                            handleChange('longlat', v)
+                          }}
+                        />
+                      </div>
+                    </div>
+                  )}
+
+                  {showMap && (
+                    <div className="mt-2 text-[11px] text-gray-500">
+                      Map dibuka otomatis dalam mode live. Kalau kamu edit input / pilih titik manual, live berhenti.
+                      Tutup & buka map lagi untuk live ulang.
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
 
@@ -630,11 +780,7 @@ export default function Page() {
               <UploadPreview label="Foto Sebelum" file={fotoSebelum} setFile={setFotoSebelum} />
               <UploadPreview label="Foto Proses" file={fotoProses} setFile={setFotoProses} />
               <UploadPreview label="Foto Sesudah" file={fotoSesudah} setFile={setFotoSesudah} />
-              <UploadPreview
-                label="Lampiran BA Penggantian"
-                file={fotoLampiranBA}
-                setFile={setFotoLampiranBA}
-              />
+              <UploadPreview label="Lampiran BA Penggantian" file={fotoLampiranBA} setFile={setFotoLampiranBA} />
             </div>
 
             {/* ACTION */}
@@ -660,7 +806,6 @@ export default function Page() {
               </button>
             </div>
 
-            {/* helper text if invalid */}
             {!isFormValid && (
               <div className="mt-6 text-xs text-gray-500 text-center">
                 Lengkapi semua field & upload 4 foto untuk bisa Submit.
@@ -736,6 +881,7 @@ function NumberStepper({ label, value, onChange }: NumberStepperProps) {
           type="number"
           value={value}
           onChange={e => onChange(e.target.value)}
+          autoComplete="off"
           className="flex-1 py-3 px-5 border-2 border-[#2FA6DE] rounded-full bg-white
             focus:outline-none focus:ring-2 focus:ring-[#2FA6DE]/30"
         />
@@ -755,44 +901,6 @@ function NumberStepper({ label, value, onChange }: NumberStepperProps) {
         >
           +
         </button>
-      </div>
-    </div>
-  )
-}
-
-function LongLatSplit({ label, value }: { label: string; value: string }) {
-  const parts = String(value || '')
-    .split(',')
-    .map(s => s.trim())
-    .filter(Boolean)
-
-  const left = parts[0] || ''
-  const right = parts[1] || ''
-  const empty = !left && !right
-
-  return (
-    <div>
-      <label className="text-sm font-semibold">
-        {label} <span className="text-red-500">*</span>
-      </label>
-
-      <div className="mt-2 grid grid-cols-1 md:grid-cols-2 gap-3">
-        <input
-          readOnly
-          value={left}
-          placeholder="Lat"
-          className={`w-full py-3 px-5 border-2 border-[#2FA6DE] rounded-full
-            focus:outline-none focus:ring-2 focus:ring-[#2FA6DE]/30
-            bg-gray-100 ${empty && !left ? 'text-gray-400' : 'text-black'}`}
-        />
-        <input
-          readOnly
-          value={right}
-          placeholder="Long"
-          className={`w-full py-3 px-5 border-2 border-[#2FA6DE] rounded-full
-            focus:outline-none focus:ring-2 focus:ring-[#2FA6DE]/30
-            bg-gray-100 ${empty && !right ? 'text-gray-400' : 'text-black'}`}
-        />
       </div>
     </div>
   )
@@ -824,6 +932,7 @@ function UploadPreview({ label, file, setFile }: UploadPreviewProps) {
         <div className="relative mt-2 h-[220px] border-2 border-dashed border-[#2FA6DE] rounded-2xl flex items-center justify-center">
           {preview ? (
             <>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
                 src={preview}
                 alt="preview"
@@ -845,9 +954,7 @@ function UploadPreview({ label, file, setFile }: UploadPreviewProps) {
                 type="file"
                 accept="image/*"
                 hidden
-                onChange={(e: ChangeEvent<HTMLInputElement>) =>
-                  e.target.files && setFile(e.target.files[0])
-                }
+                onChange={(e: ChangeEvent<HTMLInputElement>) => e.target.files && setFile(e.target.files[0])}
               />
             </label>
           )}
@@ -855,10 +962,8 @@ function UploadPreview({ label, file, setFile }: UploadPreviewProps) {
       </div>
 
       {open && preview && (
-        <div
-          onClick={() => setOpen(false)}
-          className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center"
-        >
+        <div onClick={() => setOpen(false)} className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src={preview} alt="preview-large" className="max-w-[90vw] max-h-[90vh] rounded-xl" />
         </div>
       )}
@@ -890,13 +995,12 @@ function PopupSelect({
   const [open, setOpen] = useState(false)
   const [search, setSearch] = useState('')
 
-  const filtered = searchable
-    ? options.filter(o => o.toLowerCase().includes(search.toLowerCase()))
-    : options
+  const safeOptions = Array.isArray(options) ? options.filter(Boolean) : []
+  const filtered = searchable ? safeOptions.filter(o => o.toLowerCase().includes(search.toLowerCase())) : safeOptions
 
   const customCandidate = search.trim()
   const canAddCustom =
-    allowCustom && searchable && customCandidate && !options.includes(customCandidate)
+    allowCustom && searchable && customCandidate && !safeOptions.some(o => norm(o) === norm(customCandidate))
 
   return (
     <>
@@ -918,10 +1022,7 @@ function PopupSelect({
       </div>
 
       {open && (
-        <div
-          onClick={() => setOpen(false)}
-          className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center"
-        >
+        <div onClick={() => setOpen(false)} className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center">
           <div
             onClick={e => e.stopPropagation()}
             className="bg-white p-6 rounded-xl w-[700px] max-w-[92vw] max-h-[75vh] flex flex-col"
@@ -932,7 +1033,9 @@ function PopupSelect({
               <input
                 placeholder="Cari..."
                 value={search}
-                onChange={(e: ChangeEvent<HTMLInputElement>) => setSearch(e.target.value)}
+                onChange={e => setSearch(e.target.value)}
+                autoComplete="off"
+                name={`search_${label.replace(/\s+/g, '_')}`}
                 className="mb-3 px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-[#2FA6DE]/30"
               />
             )}
@@ -951,23 +1054,28 @@ function PopupSelect({
                 </div>
               )}
 
-              {filtered.map(o => {
-                const selected = o === value
-                return (
-                  <div
-                    key={o}
-                    onClick={() => {
-                      onSave(o)
-                      setOpen(false)
-                      setSearch('')
-                    }}
-                    className={`py-2 px-3 rounded-lg cursor-pointer
-                      ${selected ? 'bg-[#E8F5FB] text-blue-600 font-semibold' : 'hover:bg-gray-100'}`}
-                  >
-                    {o}
-                  </div>
-                )
-              })}
+              {filtered.length === 0 ? (
+                <div className="py-3 px-3 text-gray-500">Tidak ada opsi tersedia</div>
+              ) : (
+                filtered.map(o => {
+                  const selected = norm(o) === norm(value)
+                  return (
+                    <div
+                      key={o}
+                      onClick={() => {
+                        onSave(o)
+                        setOpen(false)
+                        setSearch('')
+                      }}
+                      className={`py-2 px-3 rounded-lg cursor-pointer ${
+                        selected ? 'bg-[#E8F5FB] text-blue-600 font-semibold' : 'hover:bg-gray-100'
+                      }`}
+                    >
+                      {o}
+                    </div>
+                  )
+                })
+              )}
             </div>
 
             <button
@@ -1018,9 +1126,8 @@ function PopupMultiSelect({
     if (open) setTemp(value)
   }, [open, value])
 
-  const filtered = searchable
-    ? options.filter(o => o.toLowerCase().includes(search.toLowerCase()))
-    : options
+  const safeOptions = Array.isArray(options) ? options.filter(Boolean) : []
+  const filtered = searchable ? safeOptions.filter(o => o.toLowerCase().includes(search.toLowerCase())) : safeOptions
 
   const displayText = useMemo(() => {
     if (value.length === 0) return `Pilih ${label}`
@@ -1028,11 +1135,11 @@ function PopupMultiSelect({
 
     return value
       .map(v => {
-        const idx = options.indexOf(v)
+        const idx = safeOptions.indexOf(v)
         return idx >= 0 ? `(${idx + 1}) ${v}` : v
       })
       .join(', ')
-  }, [value, label, displayMode, options])
+  }, [value, label, displayMode, safeOptions])
 
   const toggle = (opt: string) => {
     setTemp(prev => (prev.includes(opt) ? prev.filter(x => x !== opt) : [...prev, opt]))
@@ -1061,10 +1168,7 @@ function PopupMultiSelect({
       </div>
 
       {open && (
-        <div
-          onClick={() => setOpen(false)}
-          className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center"
-        >
+        <div onClick={() => setOpen(false)} className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center">
           <div
             onClick={e => e.stopPropagation()}
             className="bg-white p-6 rounded-xl w-[700px] max-w-[92vw] max-h-[75vh] flex flex-col"
@@ -1075,7 +1179,9 @@ function PopupMultiSelect({
               <input
                 placeholder="Cari..."
                 value={search}
-                onChange={(e: ChangeEvent<HTMLInputElement>) => setSearch(e.target.value)}
+                onChange={e => setSearch(e.target.value)}
+                autoComplete="off"
+                name={`search_multi_${label.replace(/\s+/g, '_')}`}
                 className="mb-3 px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-[#2FA6DE]/30"
               />
             )}
@@ -1087,8 +1193,9 @@ function PopupMultiSelect({
                   <div
                     key={o}
                     onClick={() => toggle(o)}
-                    className={`py-2 px-3 rounded-lg cursor-pointer flex items-start gap-3
-                      ${selected ? 'bg-[#E8F5FB]' : 'hover:bg-gray-100'}`}
+                    className={`py-2 px-3 rounded-lg cursor-pointer flex items-start gap-3 ${
+                      selected ? 'bg-[#E8F5FB]' : 'hover:bg-gray-100'
+                    }`}
                   >
                     <input type="checkbox" checked={selected} readOnly className="mt-1" />
                     <div className={`${selected ? 'text-blue-600 font-semibold' : ''}`}>{o}</div>
@@ -1150,11 +1257,11 @@ function Input({ label, value, type = 'text', onChange, readOnly = false }: Inpu
         value={value}
         readOnly={readOnly}
         onChange={onChange}
+        autoComplete="off"
         className={`mt-2 w-full py-3 px-5 border-2 border-[#2FA6DE] rounded-full
           focus:outline-none focus:ring-2 focus:ring-[#2FA6DE]/30
           ${readOnly ? 'bg-gray-100' : 'bg-white'}
-          ${isDateEmpty ? 'text-gray-400' : 'text-black'}
-        `}
+          ${isDateEmpty ? 'text-gray-400' : 'text-black'}`}
       />
     </div>
   )
