@@ -1,65 +1,61 @@
-'use client'
+'use client';
 
-import dynamic from 'next/dynamic'
-import { useMemo, useState, ChangeEvent, useEffect } from 'react'
-import Image from 'next/image'
-import { IoArrowBack, IoChevronDown, IoClose, IoAdd, IoLocationSharp } from 'react-icons/io5'
-import { useRouter } from 'next/navigation'
+import dynamic from 'next/dynamic';
+import { useMemo, useState, ChangeEvent, useEffect } from 'react';
+import Image from 'next/image';
+import { IoArrowBack, IoChevronDown, IoClose, IoAdd, IoLocationSharp } from 'react-icons/io5';
+import { useRouter } from 'next/navigation';
 
-import bg from '@/app/assets/plnup3/bgnogradient.png'
-import plnKecil from '@/app/assets/plnup3/plnkecil.svg'
+import bg from '@/app/assets/plnup3/bgnogradient.png';
+import plnKecil from '@/app/assets/plnup3/plnkecil.svg';
 
-/* ================= MAP (client only) ================= */
-
-const MapPicker = dynamic(() => import('../components/MapPicker'), { ssr: false }),
-
-/* ================= API ================= */
+const MapPicker = dynamic(() => import('../components/MapPicker'), { ssr: false });
 
 const API_URL =
-  'https://script.google.com/macros/s/AKfycbyOI9u0Gi7byOWbF5NhIgf3BUSHahtj8y6Bmz0NezhzMNiHdioI1nef7JqWZ31fsw9AbQ/exec'
+  'https://script.google.com/macros/s/AKfycbzRDMaCMfNqLKd_wqrQBiHj074VPKruyxW0tJkkd6UL621eoA374IlF9lamc1JX1dBJ/exec';
 
 /* ================= TYPES ================= */
 
 type AsetGdRow = {
-  up3: string
-  ulp: string
-  namaGardu: string
-  penyulang: string
-  zona: string
-  section: string
-  longlat: string
-  kapasitas: string
-  fasa: string
-}
+  up3: string;
+  ulp: string;
+  namaGardu: string;
+  penyulang: string;
+  zona: string;
+  section: string;
+  longlat: string;
+  kapasitas: string;
+  fasa: string;
+};
 
 type FormState = {
-  up3: string
-  ulp: string
-  tanggalHar: string
+  up3: string;
+  ulp: string;
+  tanggalHar: string;
 
-  namaGardu: string
-  longlat: string
-  kapasitas: string
-  fasa: string
-  zona: string
-  section: string
-  penyulang: string
+  namaGardu: string;
+  longlat: string;
+  kapasitas: string;
+  fasa: string;
+  zona: string;
+  section: string;
+  penyulang: string;
 
-  alasan: string[]
-  pemeliharaan: string[]
+  alasan: string[];
+  pemeliharaan: string[];
 
-  dieksekusiOleh: string
-  jumlahItemMaterial: string
-}
+  dieksekusiOleh: string;
+  jumlahItemMaterial: string;
+};
 
-type ImagePayload = { filename: string; mimeType: string; base64: string }
+type ImagePayload = { filename: string; mimeType: string; base64: string };
 
 type ToastState = {
-  open: boolean
-  variant: 'success' | 'error' | 'warning' | 'info'
-  title: string
-  message?: string
-}
+  open: boolean;
+  variant: 'success' | 'error' | 'warning' | 'info';
+  title: string;
+  message?: string;
+};
 
 /* ================= OPTIONS ================= */
 
@@ -77,7 +73,7 @@ const APA_YANG_DILAKUKAN_OPTIONS = [
   'Pembersihan halaman gardu',
   'Pengecatan gardu MC',
   'Aktivasi relay dan heater kubikel',
-]
+];
 
 const MENGAPA_GARDU_DIPELIHARA_OPTIONS = [
   'ADANYA FLASHOVER/KORONA/SUARA MENDESIS',
@@ -87,7 +83,7 @@ const MENGAPA_GARDU_DIPELIHARA_OPTIONS = [
   'KONDISI RUANGAN SANGAT LEMBAB',
   'PANEL PHBTR KOTOR',
   'PIPA KABEL TIDAK ADA/RUSAK',
-]
+];
 
 const DIEKSEKUSI_OLEH_OPTIONS = [
   'TIM PDKB',
@@ -100,56 +96,55 @@ const DIEKSEKUSI_OLEH_OPTIONS = [
   'PT DKE',
   'PT NUN',
   'PT LAKAWAN',
-]
+];
 
 /* ================= HELPERS ================= */
 
-const norm = (v: any) => String(v ?? '').trim().toUpperCase()
+const norm = (v: any) => String(v ?? '').trim().toUpperCase();
 
 const uniquePretty = (arr: any[]) => {
-  const m = new Map<string, string>()
+  const m = new Map<string, string>();
   for (const v of arr) {
-    const raw = String(v ?? '').trim()
-    const k = norm(raw)
-    if (k && !m.has(k)) m.set(k, raw)
+    const raw = String(v ?? '').trim();
+    const k = norm(raw);
+    if (k && !m.has(k)) m.set(k, raw);
   }
-  return Array.from(m.values()).sort()
-}
+  return Array.from(m.values()).sort();
+};
 
 const pickUnique = (vals: string[]) => {
-  const u = uniquePretty(vals)
-  return u.length === 1 ? u[0] : ''
-}
+  const u = uniquePretty(vals);
+  return u.length === 1 ? u[0] : '';
+};
 
 const fmtCoord = (n: number) => {
-  if (!Number.isFinite(n)) return ''
-  return n.toFixed(6)
-}
+  if (!Number.isFinite(n)) return '';
+  return n.toFixed(6);
+};
 
 const fileToBase64Payload = (file: File) =>
   new Promise<ImagePayload>((resolve, reject) => {
-    const reader = new FileReader()
-    reader.onerror = () => reject(new Error('Gagal membaca file'))
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error('Gagal membaca file'));
     reader.onload = () => {
-      const res = String(reader.result || '')
-      const base64 = res.includes(',') ? res.split(',')[1] : res
+      const res = String(reader.result || '');
+      const base64 = res.includes(',') ? res.split(',')[1] : res;
       resolve({
         filename: file.name || `image_${Date.now()}.jpg`,
         mimeType: file.type || 'image/jpeg',
         base64,
-      })
-    }
-    reader.readAsDataURL(file)
-  })
+      });
+    };
+    reader.readAsDataURL(file);
+  });
 
 /* ================= PAGE ================= */
 
 export default function Page() {
-  const router = useRouter()
+  const router = useRouter();
 
-  // ✅ avoid SSR/client mismatch
-  const [mounted, setMounted] = useState(false)
-  useEffect(() => setMounted(true), [])
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
 
   /* ========= TOAST ========= */
   const [toast, setToast] = useState<ToastState>({
@@ -157,49 +152,52 @@ export default function Page() {
     variant: 'info',
     title: '',
     message: '',
-  })
+  });
 
   const showToast = (t: Omit<ToastState, 'open'>) => {
-    setToast({ open: true, ...t })
-    window.setTimeout(() => setToast(p => ({ ...p, open: false })), 4500)
-  }
+    setToast({ open: true, ...t });
+    window.setTimeout(() => setToast(p => ({ ...p, open: false })), 4500);
+  };
 
   /* ========= FETCH ASET ========= */
 
-  const [aset, setAset] = useState<AsetGdRow[]>([])
-  const [asetLoading, setAsetLoading] = useState(false)
-  const [asetError, setAsetError] = useState<string>('')
+  const [aset, setAset] = useState<AsetGdRow[]>([]);
+  const [asetLoading, setAsetLoading] = useState(false);
+  const [asetError, setAsetError] = useState<string>('');
 
   useEffect(() => {
     const run = async () => {
       try {
-        setAsetLoading(true)
-        setAsetError('')
+        setAsetLoading(true);
+        setAsetError('');
 
         const res = await fetch(`${API_URL}?type=aset&_=${Date.now()}`, {
           method: 'GET',
           cache: 'no-store',
-        })
+        });
+
         const json = (await res.json()) as {
-          data?: AsetGdRow[]
-          ok?: boolean
-          error?: boolean
-          message?: string
+          data?: AsetGdRow[];
+          ok?: boolean;
+          error?: boolean;
+          message?: string;
+        };
+
+        if (!res.ok || json?.error || json?.ok === false) {
+          throw new Error(json?.message || `HTTP ${res.status}`);
         }
 
-        if (!res.ok || json?.error || json?.ok === false) throw new Error(json?.message || `HTTP ${res.status}`)
-
-        setAset(Array.isArray(json.data) ? json.data : [])
+        setAset(Array.isArray(json.data) ? json.data : []);
       } catch (e: any) {
-        setAsetError(e?.message || 'Gagal mengambil data ASET GD')
-        setAset([])
+        setAsetError(e?.message || 'Gagal mengambil data ASET GD');
+        setAset([]);
       } finally {
-        setAsetLoading(false)
+        setAsetLoading(false);
       }
-    }
+    };
 
-    if (mounted) run()
-  }, [mounted])
+    if (mounted) run();
+  }, [mounted]);
 
   /* ========= FORM ========= */
 
@@ -221,88 +219,83 @@ export default function Page() {
 
     dieksekusiOleh: '',
     jumlahItemMaterial: '0',
-  })
+  });
 
   const handleChange = <K extends keyof FormState>(key: K, val: FormState[K]) => {
-    setForm(p => ({ ...p, [key]: val }))
-  }
+    setForm(p => ({ ...p, [key]: val }));
+  };
 
-  /* ========= MAP: icon only, when opened => LIVE by default =========
-     - Autofill longlat from DB still happens on namaGardu change
-     - But user can always edit longlat (input + map)
-     - When map opens => starts live GPS and updates longlat
-     - If user edits or taps map => stop live (so it won't overwrite manual choice)
-  */
+  /* ========= MAP (live when opened) ========= */
 
-  const [showMap, setShowMap] = useState(false)
-  const [tracking, setTracking] = useState(false)
-  const [geoError, setGeoError] = useState('')
+  const [showMap, setShowMap] = useState(false);
+  const [tracking, setTracking] = useState(false);
+  const [geoError, setGeoError] = useState('');
 
   const openMapLive = () => {
-    setShowMap(true)
-    setGeoError('')
-    setTracking(true) // ✅ live by default when opened
-  }
+    setShowMap(true);
+    setGeoError('');
+    setTracking(true);
+  };
 
   const closeMap = () => {
-    setShowMap(false)
-    setTracking(false)
-    setGeoError('')
-  }
+    setShowMap(false);
+    setTracking(false);
+    setGeoError('');
+  };
 
   useEffect(() => {
-    if (!tracking) return
+    if (!tracking) return;
 
     if (typeof window === 'undefined' || !navigator.geolocation) {
-      setGeoError('Perangkat tidak mendukung GPS (Geolocation).')
-      setTracking(false)
-      return
+      setGeoError('Perangkat tidak mendukung GPS (Geolocation).');
+      setTracking(false);
+      return;
     }
 
     const id = navigator.geolocation.watchPosition(
       pos => {
-        const lat = fmtCoord(pos.coords.latitude)
-        const lng = fmtCoord(pos.coords.longitude)
-        const v = lat && lng ? `${lat},${lng}` : ''
-        if (v) setForm(p => ({ ...p, longlat: v }))
+        const lat = fmtCoord(pos.coords.latitude);
+        const lng = fmtCoord(pos.coords.longitude);
+        const v = lat && lng ? `${lat},${lng}` : '';
+        if (v) setForm(p => ({ ...p, longlat: v }));
       },
       err => {
-        setGeoError(err?.message || 'Gagal mengambil lokasi GPS.')
-        setTracking(false)
+        setGeoError(err?.message || 'Gagal mengambil lokasi GPS.');
+        setTracking(false);
       },
       { enableHighAccuracy: true, maximumAge: 3000, timeout: 15000 }
-    )
+    );
 
-    return () => navigator.geolocation.clearWatch(id)
-  }, [tracking])
+    return () => navigator.geolocation.clearWatch(id);
+  }, [tracking]);
 
   /* ========= BASE ROWS ========= */
 
-  const baseUp3Rows = useMemo(() => aset.filter(a => norm(a.up3) === norm(form.up3)), [aset, form.up3])
+  const baseUp3Rows = useMemo(() => aset.filter(a => norm(a.up3) === norm(form.up3)), [aset, form.up3]);
 
-  /* ========= ALWAYS SHOW OPTIONS (penyulang/zona/section always ALL) ========= */
+  /* ========= ALWAYS SHOW OPTIONS ========= */
 
-  const ULP_LIST = useMemo(() => uniquePretty(baseUp3Rows.map(a => a.ulp)), [baseUp3Rows])
+  const ULP_LIST = useMemo(() => uniquePretty(baseUp3Rows.map(a => a.ulp)), [baseUp3Rows]);
 
   const NAMA_GARDU_LIST = useMemo(() => {
-    const all = uniquePretty(baseUp3Rows.map(a => a.namaGardu))
-    if (!form.ulp) return all
-    const filtered = uniquePretty(baseUp3Rows.filter(a => norm(a.ulp) === norm(form.ulp)).map(a => a.namaGardu))
-    return filtered.length ? filtered : all
-  }, [baseUp3Rows, form.ulp])
+    const all = uniquePretty(baseUp3Rows.map(a => a.namaGardu));
+    if (!form.ulp) return all;
 
-  const ALL_PENYULANG_LIST = useMemo(() => uniquePretty(baseUp3Rows.map(a => a.penyulang)), [baseUp3Rows])
-  const PENYULANG_LIST = useMemo(() => ALL_PENYULANG_LIST, [ALL_PENYULANG_LIST])
+    const filtered = uniquePretty(baseUp3Rows.filter(a => norm(a.ulp) === norm(form.ulp)).map(a => a.namaGardu));
+    return filtered.length ? filtered : all;
+  }, [baseUp3Rows, form.ulp]);
 
-  const ALL_ZONA_LIST = useMemo(() => uniquePretty(baseUp3Rows.map(a => a.zona)), [baseUp3Rows])
-  const ZONA_LIST = useMemo(() => ALL_ZONA_LIST, [ALL_ZONA_LIST])
+  const ALL_PENYULANG_LIST = useMemo(() => uniquePretty(baseUp3Rows.map(a => a.penyulang)), [baseUp3Rows]);
+  const PENYULANG_LIST = useMemo(() => ALL_PENYULANG_LIST, [ALL_PENYULANG_LIST]);
 
-  const ALL_SECTION_LIST = useMemo(() => uniquePretty(baseUp3Rows.map(a => a.section)), [baseUp3Rows])
-  const SECTION_LIST = useMemo(() => ALL_SECTION_LIST, [ALL_SECTION_LIST])
+  const ALL_ZONA_LIST = useMemo(() => uniquePretty(baseUp3Rows.map(a => a.zona)), [baseUp3Rows]);
+  const ZONA_LIST = useMemo(() => ALL_ZONA_LIST, [ALL_ZONA_LIST]);
+
+  const ALL_SECTION_LIST = useMemo(() => uniquePretty(baseUp3Rows.map(a => a.section)), [baseUp3Rows]);
+  const SECTION_LIST = useMemo(() => ALL_SECTION_LIST, [ALL_SECTION_LIST]);
 
   /* ========= PAIRING AUTOFILL ========= */
 
-  // ULP changes => reset
   useEffect(() => {
     setForm(prev => ({
       ...prev,
@@ -312,118 +305,114 @@ export default function Page() {
       penyulang: '',
       zona: '',
       section: '',
-    }))
-    closeMap()
+    }));
+    closeMap();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [form.ulp])
+  }, [form.ulp]);
 
-  // namaGardu changes => autofill fields including longlat (still editable)
   useEffect(() => {
-    if (!form.namaGardu) return
+    if (!form.namaGardu) return;
 
     const rowsForGardu = baseUp3Rows.filter(a => {
-      if (form.ulp && norm(a.ulp) !== norm(form.ulp)) return false
-      return norm(a.namaGardu) === norm(form.namaGardu)
-    })
+      if (form.ulp && norm(a.ulp) !== norm(form.ulp)) return false;
+      return norm(a.namaGardu) === norm(form.namaGardu);
+    });
 
-    const row0 = rowsForGardu[0]
-    const uniqueP = pickUnique(rowsForGardu.map(r => r.penyulang))
-    const uniqueZ = pickUnique(rowsForGardu.map(r => r.zona))
-    const uniqueS = pickUnique(rowsForGardu.map(r => r.section))
+    const row0 = rowsForGardu[0];
+    const uniqueP = pickUnique(rowsForGardu.map(r => r.penyulang));
+    const uniqueZ = pickUnique(rowsForGardu.map(r => r.zona));
+    const uniqueS = pickUnique(rowsForGardu.map(r => r.section));
 
     setForm(prev => {
-      let nextP = prev.penyulang
-      if (nextP && !ALL_PENYULANG_LIST.some(o => norm(o) === norm(nextP))) nextP = ''
-      if (!nextP && uniqueP) nextP = uniqueP
+      let nextP = prev.penyulang;
+      if (nextP && !ALL_PENYULANG_LIST.some(o => norm(o) === norm(nextP))) nextP = '';
+      if (!nextP && uniqueP) nextP = uniqueP;
 
       return {
         ...prev,
-        longlat: row0?.longlat || '', // ✅ AUTOFILL even though editable
+        longlat: row0?.longlat || prev.longlat || '',
         kapasitas: row0?.kapasitas || prev.kapasitas || '0',
         fasa: row0?.fasa || '',
         penyulang: nextP,
-        zona: uniqueZ || '',
-        section: uniqueS || '',
-      }
-    })
+        zona: uniqueZ || prev.zona || '',
+        section: uniqueS || prev.section || '',
+      };
+    });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [form.namaGardu, form.ulp, baseUp3Rows, ALL_PENYULANG_LIST])
+  }, [form.namaGardu, form.ulp, baseUp3Rows, ALL_PENYULANG_LIST]);
 
-  // penyulang changes => autofill zona/section if unique
   useEffect(() => {
-    if (!form.penyulang) return
+    if (!form.penyulang) return;
 
     const rowsForP = baseUp3Rows.filter(a => {
-      if (form.ulp && norm(a.ulp) !== norm(form.ulp)) return false
-      return norm(a.penyulang) === norm(form.penyulang)
-    })
+      if (form.ulp && norm(a.ulp) !== norm(form.ulp)) return false;
+      return norm(a.penyulang) === norm(form.penyulang);
+    });
 
-    const uniqueG = !form.namaGardu ? pickUnique(rowsForP.map(r => r.namaGardu)) : ''
-    const uniqueZ = pickUnique(rowsForP.map(r => r.zona))
-    const uniqueS = pickUnique(rowsForP.map(r => r.section))
+    const uniqueG = !form.namaGardu ? pickUnique(rowsForP.map(r => r.namaGardu)) : '';
+    const uniqueZ = pickUnique(rowsForP.map(r => r.zona));
+    const uniqueS = pickUnique(rowsForP.map(r => r.section));
 
     setForm(prev => ({
       ...prev,
       zona: uniqueZ || '',
       section: uniqueS || '',
-    }))
+    }));
 
-    if (uniqueG) handleChange('namaGardu', uniqueG)
+    if (uniqueG) handleChange('namaGardu', uniqueG);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [form.penyulang])
+  }, [form.penyulang]);
 
-  // zona changes => autofill section if unique
   useEffect(() => {
-    if (!form.zona) return
+    if (!form.zona) return;
 
     const rowsForZ = baseUp3Rows.filter(a => {
-      if (form.ulp && norm(a.ulp) !== norm(form.ulp)) return false
-      if (form.namaGardu && norm(a.namaGardu) !== norm(form.namaGardu)) return false
-      if (form.penyulang && norm(a.penyulang) !== norm(form.penyulang)) return false
-      return norm(a.zona) === norm(form.zona)
-    })
+      if (form.ulp && norm(a.ulp) !== norm(form.ulp)) return false;
+      if (form.namaGardu && norm(a.namaGardu) !== norm(form.namaGardu)) return false;
+      if (form.penyulang && norm(a.penyulang) !== norm(form.penyulang)) return false;
+      return norm(a.zona) === norm(form.zona);
+    });
 
-    const uniqueS = pickUnique(rowsForZ.map(r => r.section))
-    setForm(prev => ({ ...prev, section: uniqueS || prev.section }))
+    const uniqueS = pickUnique(rowsForZ.map(r => r.section));
+    setForm(prev => ({ ...prev, section: uniqueS || prev.section }));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [form.zona])
+  }, [form.zona]);
 
-  // Clear ghost values after refresh
   useEffect(() => {
     if (form.penyulang && !ALL_PENYULANG_LIST.some(o => norm(o) === norm(form.penyulang))) {
-      setForm(prev => ({ ...prev, penyulang: '' }))
+      setForm(prev => ({ ...prev, penyulang: '' }));
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ALL_PENYULANG_LIST])
+  }, [ALL_PENYULANG_LIST]);
 
   useEffect(() => {
     if (form.zona && !ALL_ZONA_LIST.some(o => norm(o) === norm(form.zona))) {
-      setForm(prev => ({ ...prev, zona: '' }))
+      setForm(prev => ({ ...prev, zona: '' }));
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ALL_ZONA_LIST])
+  }, [ALL_ZONA_LIST]);
 
   useEffect(() => {
     if (form.section && !ALL_SECTION_LIST.some(o => norm(o) === norm(form.section))) {
-      setForm(prev => ({ ...prev, section: '' }))
+      setForm(prev => ({ ...prev, section: '' }));
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ALL_SECTION_LIST])
+  }, [ALL_SECTION_LIST]);
 
   /* ================= FOTO ================= */
 
-  const [fotoSebelum, setFotoSebelum] = useState<File | null>(null)
-  const [fotoProses, setFotoProses] = useState<File | null>(null)
-  const [fotoSesudah, setFotoSesudah] = useState<File | null>(null)
-  const [fotoLampiranBA, setFotoLampiranBA] = useState<File | null>(null)
+  const [fotoSebelum, setFotoSebelum] = useState<File | null>(null);
+  const [fotoProses, setFotoProses] = useState<File | null>(null);
+  const [fotoSesudah, setFotoSesudah] = useState<File | null>(null);
+  const [fotoLampiranBA, setFotoLampiranBA] = useState<File | null>(null);
 
   /* ================= VALIDASI ================= */
 
   const isNonEmpty = (v: unknown) => {
-    if (Array.isArray(v)) return v.length > 0
-    if (typeof v === 'string') return v.trim() !== ''
-    return false
-  }
+    if (Array.isArray(v)) return v.length > 0;
+    if (typeof v === 'string') return v.trim() !== '';
+    return false;
+  };
 
   const isFormValid =
     isNonEmpty(form.up3) &&
@@ -433,7 +422,7 @@ export default function Page() {
     isNonEmpty(form.penyulang) &&
     isNonEmpty(form.zona) &&
     isNonEmpty(form.section) &&
-    isNonEmpty(form.longlat) && // ✅ required, user can adjust
+    isNonEmpty(form.longlat) &&
     isNonEmpty(form.pemeliharaan) &&
     isNonEmpty(form.alasan) &&
     isNonEmpty(form.dieksekusiOleh) &&
@@ -441,38 +430,38 @@ export default function Page() {
     fotoSebelum &&
     fotoProses &&
     fotoSesudah &&
-    fotoLampiranBA
+    fotoLampiranBA;
 
   /* ================= SUBMIT ================= */
 
-  const [submitting, setSubmitting] = useState(false)
+  const [submitting, setSubmitting] = useState(false);
 
   const alasanText = useMemo(() => {
     return form.alasan
       .map(v => {
-        const idx = MENGAPA_GARDU_DIPELIHARA_OPTIONS.indexOf(v)
-        return idx >= 0 ? `(${idx + 1}) ${v}` : v
+        const idx = MENGAPA_GARDU_DIPELIHARA_OPTIONS.indexOf(v);
+        return idx >= 0 ? `(${idx + 1}) ${v}` : v;
       })
-      .join(', ')
-  }, [form.alasan])
+      .join(', ');
+  }, [form.alasan]);
 
   const pemeliharaanText = useMemo(() => {
-    return form.pemeliharaan.map(v => `- ${v}`).join('\n')
-  }, [form.pemeliharaan])
+    return form.pemeliharaan.map(v => `- ${v}`).join('\n');
+  }, [form.pemeliharaan]);
 
   const handleSubmit = async () => {
-    if (!isFormValid || submitting) return
+    if (!isFormValid || submitting) return;
 
     try {
-      setSubmitting(true)
-      showToast({ variant: 'info', title: 'Mengirim...', message: 'Sedang upload foto & simpan data' })
+      setSubmitting(true);
+      showToast({ variant: 'info', title: 'Mengirim...', message: 'Sedang upload foto & simpan data' });
 
       const [sebelum, proses, sesudah, ba] = await Promise.all([
         fileToBase64Payload(fotoSebelum!),
         fileToBase64Payload(fotoProses!),
         fileToBase64Payload(fotoSesudah!),
         fileToBase64Payload(fotoLampiranBA!),
-      ])
+      ]);
 
       const payload = {
         type: 'pemeliharaanGT',
@@ -487,28 +476,27 @@ export default function Page() {
           fotoSesudah: sesudah,
           fotoLampiranBA: ba,
         },
-      }
+      };
 
       const res = await fetch(API_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'text/plain;charset=utf-8' },
         body: JSON.stringify(payload),
-      })
+      });
 
-      const json = await res.json()
+      const json = await res.json().catch(() => null);
 
       if (!res.ok || json?.ok === false) {
-        throw new Error(json?.message || `HTTP ${res.status}`)
+        throw new Error(json?.message || `HTTP ${res.status}`);
       }
 
-      const warnings = Array.isArray(json?.warnings) ? json.warnings : []
+      const warnings = Array.isArray(json?.warnings) ? json.warnings : [];
       if (warnings.length) {
-        showToast({ variant: 'warning', title: 'Tersimpan, tapi ada catatan', message: warnings.join(' • ') })
+        showToast({ variant: 'warning', title: 'Tersimpan, tapi ada catatan', message: warnings.join(' • ') });
       } else {
-        showToast({ variant: 'success', title: 'Berhasil ✅', message: 'Data sudah masuk ke PEMELIHARAAN GT' })
+        showToast({ variant: 'success', title: 'Berhasil ✅', message: 'Data sudah masuk ke PEMELIHARAAN GT' });
       }
 
-      // reset
       setForm(prev => ({
         ...prev,
         ulp: '',
@@ -524,18 +512,19 @@ export default function Page() {
         pemeliharaan: [],
         dieksekusiOleh: '',
         jumlahItemMaterial: '0',
-      }))
-      setFotoSebelum(null)
-      setFotoProses(null)
-      setFotoSesudah(null)
-      setFotoLampiranBA(null)
-      closeMap()
+      }));
+
+      setFotoSebelum(null);
+      setFotoProses(null);
+      setFotoSesudah(null);
+      setFotoLampiranBA(null);
+      closeMap();
     } catch (e: any) {
-      showToast({ variant: 'error', title: 'Gagal ❌', message: e?.message || 'Submit gagal' })
+      showToast({ variant: 'error', title: 'Gagal ❌', message: e?.message || 'Submit gagal' });
     } finally {
-      setSubmitting(false)
+      setSubmitting(false);
     }
-  }
+  };
 
   const handleCancel = () => {
     setForm(prev => ({
@@ -553,21 +542,21 @@ export default function Page() {
       pemeliharaan: [],
       dieksekusiOleh: '',
       jumlahItemMaterial: '0',
-    }))
-    setFotoSebelum(null)
-    setFotoProses(null)
-    setFotoSesudah(null)
-    setFotoLampiranBA(null)
-    closeMap()
-    showToast({ variant: 'info', title: 'Dibatalkan', message: 'Form direset' })
-  }
+    }));
+    setFotoSebelum(null);
+    setFotoProses(null);
+    setFotoSesudah(null);
+    setFotoLampiranBA(null);
+    closeMap();
+    showToast({ variant: 'info', title: 'Dibatalkan', message: 'Form direset' });
+  };
 
   if (!mounted) {
     return (
       <div className="h-screen flex items-center justify-center font-poppins">
         <div className="text-sm text-gray-600">Loading...</div>
       </div>
-    )
+    );
   }
 
   return (
@@ -611,8 +600,7 @@ export default function Page() {
               {asetLoading && <div className="text-sm text-gray-500">Memuat data ASET GD...</div>}
               {!asetLoading && asetError && (
                 <div className="text-sm text-red-600">
-                  Error fetch ASET: {asetError}{' '}
-                  <span className="text-gray-500">(dropdown tetap tampil semua opsi)</span>
+                  Error fetch ASET: {asetError} <span className="text-gray-500">(dropdown tetap tampil semua opsi)</span>
                 </div>
               )}
             </div>
@@ -620,12 +608,7 @@ export default function Page() {
             <div className="w-full grid grid-cols-1 md:grid-cols-2 gap-x-10 gap-y-6">
               <Input label="UP3" value={form.up3} readOnly />
 
-              <Input
-                label="Tanggal HAR Gardu"
-                type="date"
-                value={form.tanggalHar}
-                onChange={e => handleChange('tanggalHar', e.target.value)}
-              />
+              <Input label="Tanggal HAR Gardu" type="date" value={form.tanggalHar} onChange={e => handleChange('tanggalHar', e.target.value)} />
 
               <PopupSelect
                 label="ULP"
@@ -697,11 +680,7 @@ export default function Page() {
                 onClear={() => handleChange('zona', '')}
               />
 
-              <NumberStepper
-                label="Jumlah item material"
-                value={form.jumlahItemMaterial}
-                onChange={v => handleChange('jumlahItemMaterial', v)}
-              />
+              <NumberStepper label="Jumlah item material" value={form.jumlahItemMaterial} onChange={v => handleChange('jumlahItemMaterial', v)} />
 
               <PopupSelect
                 label="Section"
@@ -726,9 +705,8 @@ export default function Page() {
                     <input
                       value={form.longlat}
                       onChange={e => {
-                        // user manual change -> stop live so it doesn't overwrite
-                        if (tracking) setTracking(false)
-                        handleChange('longlat', e.target.value)
+                        if (tracking) setTracking(false);
+                        handleChange('longlat', e.target.value);
                       }}
                       className="w-full py-3 pl-5 pr-12 border-2 border-[#2FA6DE] rounded-full"
                       placeholder="Contoh: -5.123456,119.123456"
@@ -738,8 +716,8 @@ export default function Page() {
                     <button
                       type="button"
                       onClick={() => {
-                        if (showMap) closeMap()
-                        else openMapLive()
+                        if (showMap) closeMap();
+                        else openMapLive();
                       }}
                       className="absolute right-4 top-1/2 -translate-y-1/2 text-dark"
                       title={showMap ? 'Tutup Map' : 'Buka Map (Live)'}
@@ -756,9 +734,8 @@ export default function Page() {
                         <MapPicker
                           koordinat={form.longlat}
                           onChange={(v: string) => {
-                            // user picks on map -> stop live so selection stays
-                            if (tracking) setTracking(false)
-                            handleChange('longlat', v)
+                            if (tracking) setTracking(false);
+                            handleChange('longlat', v);
                           }}
                         />
                       </div>
@@ -767,8 +744,8 @@ export default function Page() {
 
                   {showMap && (
                     <div className="mt-2 text-[11px] text-gray-500">
-                      Map dibuka otomatis dalam mode live. Kalau kamu edit input / pilih titik manual, live berhenti.
-                      Tutup & buka map lagi untuk live ulang.
+                      Map dibuka otomatis mode live. Kalau kamu edit input / pilih titik manual, live berhenti. Tutup &
+                      buka map lagi untuk live ulang.
                     </div>
                   )}
                 </div>
@@ -807,21 +784,19 @@ export default function Page() {
             </div>
 
             {!isFormValid && (
-              <div className="mt-6 text-xs text-gray-500 text-center">
-                Lengkapi semua field & upload 4 foto untuk bisa Submit.
-              </div>
+              <div className="mt-6 text-xs text-gray-500 text-center">Lengkapi semua field & upload 4 foto untuk bisa Submit.</div>
             )}
           </div>
         </div>
       </main>
     </div>
-  )
+  );
 }
 
 /* ================= TOAST ================= */
 
 function Toast({ toast, onClose }: { toast: ToastState; onClose: () => void }) {
-  if (!toast.open) return null
+  if (!toast.open) return null;
 
   const styles =
     toast.variant === 'success'
@@ -830,7 +805,7 @@ function Toast({ toast, onClose }: { toast: ToastState; onClose: () => void }) {
       ? 'border-red-200 bg-red-50 text-red-800'
       : toast.variant === 'warning'
       ? 'border-yellow-200 bg-yellow-50 text-yellow-800'
-      : 'border-blue-200 bg-blue-50 text-blue-800'
+      : 'border-blue-200 bg-blue-50 text-blue-800';
 
   const dot =
     toast.variant === 'success'
@@ -839,7 +814,7 @@ function Toast({ toast, onClose }: { toast: ToastState; onClose: () => void }) {
       ? 'bg-red-500'
       : toast.variant === 'warning'
       ? 'bg-yellow-500'
-      : 'bg-blue-500'
+      : 'bg-blue-500';
 
   return (
     <div className="fixed right-4 bottom-4 z-[9999] w-[360px] max-w-[92vw]">
@@ -856,19 +831,19 @@ function Toast({ toast, onClose }: { toast: ToastState; onClose: () => void }) {
         </div>
       </div>
     </div>
-  )
+  );
 }
 
 /* ================= COMPONENTS ================= */
 
 type NumberStepperProps = {
-  label: string
-  value: string
-  onChange: (value: string) => void
-}
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+};
 
 function NumberStepper({ label, value, onChange }: NumberStepperProps) {
-  const num = Number(value || 0)
+  const num = Number(value || 0);
 
   return (
     <div>
@@ -882,8 +857,7 @@ function NumberStepper({ label, value, onChange }: NumberStepperProps) {
           value={value}
           onChange={e => onChange(e.target.value)}
           autoComplete="off"
-          className="flex-1 py-3 px-5 border-2 border-[#2FA6DE] rounded-full bg-white
-            focus:outline-none focus:ring-2 focus:ring-[#2FA6DE]/30"
+          className="flex-1 py-3 px-5 border-2 border-[#2FA6DE] rounded-full bg-white focus:outline-none focus:ring-2 focus:ring-[#2FA6DE]/30"
         />
 
         <button
@@ -903,24 +877,24 @@ function NumberStepper({ label, value, onChange }: NumberStepperProps) {
         </button>
       </div>
     </div>
-  )
+  );
 }
 
 type UploadPreviewProps = {
-  label: string
-  file: File | null
-  setFile: (file: File | null) => void
-}
+  label: string;
+  file: File | null;
+  setFile: (file: File | null) => void;
+};
 
 function UploadPreview({ label, file, setFile }: UploadPreviewProps) {
-  const [open, setOpen] = useState(false)
-  const preview = file ? URL.createObjectURL(file) : null
+  const [open, setOpen] = useState(false);
+  const preview = file ? URL.createObjectURL(file) : null;
 
   useEffect(() => {
     return () => {
-      if (preview) URL.revokeObjectURL(preview)
-    }
-  }, [preview])
+      if (preview) URL.revokeObjectURL(preview);
+    };
+  }, [preview]);
 
   return (
     <>
@@ -968,19 +942,19 @@ function UploadPreview({ label, file, setFile }: UploadPreviewProps) {
         </div>
       )}
     </>
-  )
+  );
 }
 
 type PopupSelectProps = {
-  label: string
-  value: string
-  options: string[]
-  onSave: (value: string) => void
-  onClear: () => void
-  disabled?: boolean
-  searchable?: boolean
-  allowCustom?: boolean
-}
+  label: string;
+  value: string;
+  options: string[];
+  onSave: (value: string) => void;
+  onClear: () => void;
+  disabled?: boolean;
+  searchable?: boolean;
+  allowCustom?: boolean;
+};
 
 function PopupSelect({
   label,
@@ -992,29 +966,26 @@ function PopupSelect({
   searchable = false,
   allowCustom = false,
 }: PopupSelectProps) {
-  const [open, setOpen] = useState(false)
-  const [search, setSearch] = useState('')
+  const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState('');
 
-  const safeOptions = Array.isArray(options) ? options.filter(Boolean) : []
-  const filtered = searchable ? safeOptions.filter(o => o.toLowerCase().includes(search.toLowerCase())) : safeOptions
+  const safeOptions = Array.isArray(options) ? options.filter(Boolean) : [];
+  const filtered = searchable ? safeOptions.filter(o => o.toLowerCase().includes(search.toLowerCase())) : safeOptions;
 
-  const customCandidate = search.trim()
-  const canAddCustom =
-    allowCustom && searchable && customCandidate && !safeOptions.some(o => norm(o) === norm(customCandidate))
+  const customCandidate = search.trim();
+  const canAddCustom = allowCustom && searchable && customCandidate && !safeOptions.some(o => norm(o) === norm(customCandidate));
 
   return (
     <>
-      <div
-        onClick={() => !disabled && setOpen(true)}
-        className={`cursor-pointer ${disabled ? 'opacity-50 pointer-events-none' : ''}`}
-      >
+      <div onClick={() => !disabled && setOpen(true)} className={`cursor-pointer ${disabled ? 'opacity-50 pointer-events-none' : ''}`}>
         <label className="text-sm font-semibold">
           {label} <span className="text-red-500">*</span>
         </label>
 
         <div
-          className={`mt-2 px-5 py-3 rounded-full flex items-center justify-between border-2 transition
-          ${value ? 'border-[#2FA6DE] bg-[#2FA6DE]/5' : 'border-[#2FA6DE]'} hover:bg-[#2FA6DE]/5`}
+          className={`mt-2 px-5 py-3 rounded-full flex items-center justify-between border-2 transition ${
+            value ? 'border-[#2FA6DE] bg-[#2FA6DE]/5' : 'border-[#2FA6DE]'
+          } hover:bg-[#2FA6DE]/5`}
         >
           <span className={value ? '' : 'text-gray-400'}>{value || `Pilih ${label}`}</span>
           <IoChevronDown />
@@ -1023,10 +994,7 @@ function PopupSelect({
 
       {open && (
         <div onClick={() => setOpen(false)} className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center">
-          <div
-            onClick={e => e.stopPropagation()}
-            className="bg-white p-6 rounded-xl w-[700px] max-w-[92vw] max-h-[75vh] flex flex-col"
-          >
+          <div onClick={e => e.stopPropagation()} className="bg-white p-6 rounded-xl w-[700px] max-w-[92vw] max-h-[75vh] flex flex-col">
             <h2 className="font-bold mb-3">{label}</h2>
 
             {searchable && (
@@ -1044,9 +1012,9 @@ function PopupSelect({
               {canAddCustom && (
                 <div
                   onClick={() => {
-                    onSave(customCandidate)
-                    setOpen(false)
-                    setSearch('')
+                    onSave(customCandidate);
+                    setOpen(false);
+                    setSearch('');
                   }}
                   className="py-2 px-3 rounded-lg cursor-pointer hover:bg-gray-100 font-semibold"
                 >
@@ -1058,14 +1026,14 @@ function PopupSelect({
                 <div className="py-3 px-3 text-gray-500">Tidak ada opsi tersedia</div>
               ) : (
                 filtered.map(o => {
-                  const selected = norm(o) === norm(value)
+                  const selected = norm(o) === norm(value);
                   return (
                     <div
                       key={o}
                       onClick={() => {
-                        onSave(o)
-                        setOpen(false)
-                        setSearch('')
+                        onSave(o);
+                        setOpen(false);
+                        setSearch('');
                       }}
                       className={`py-2 px-3 rounded-lg cursor-pointer ${
                         selected ? 'bg-[#E8F5FB] text-blue-600 font-semibold' : 'hover:bg-gray-100'
@@ -1073,16 +1041,16 @@ function PopupSelect({
                     >
                       {o}
                     </div>
-                  )
+                  );
                 })
               )}
             </div>
 
             <button
               onClick={() => {
-                onClear()
-                setOpen(false)
-                setSearch('')
+                onClear();
+                setOpen(false);
+                setSearch('');
               }}
               className="text-red-500 mt-3"
             >
@@ -1092,22 +1060,22 @@ function PopupSelect({
         </div>
       )}
     </>
-  )
+  );
 }
 
 /* ===== MULTI SELECT ===== */
 
-type MultiDisplayMode = 'commaNumbered' | 'bullets'
+type MultiDisplayMode = 'commaNumbered' | 'bullets';
 
 type PopupMultiSelectProps = {
-  label: string
-  value: string[]
-  options: string[]
-  onSave: (value: string[]) => void
-  onClear: () => void
-  displayMode?: MultiDisplayMode
-  searchable?: boolean
-}
+  label: string;
+  value: string[];
+  options: string[];
+  onSave: (value: string[]) => void;
+  onClear: () => void;
+  displayMode?: MultiDisplayMode;
+  searchable?: boolean;
+};
 
 function PopupMultiSelect({
   label,
@@ -1118,32 +1086,32 @@ function PopupMultiSelect({
   displayMode = 'commaNumbered',
   searchable = false,
 }: PopupMultiSelectProps) {
-  const [open, setOpen] = useState(false)
-  const [search, setSearch] = useState('')
-  const [temp, setTemp] = useState<string[]>(value)
+  const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState('');
+  const [temp, setTemp] = useState<string[]>(value);
 
   useEffect(() => {
-    if (open) setTemp(value)
-  }, [open, value])
+    if (open) setTemp(value);
+  }, [open, value]);
 
-  const safeOptions = Array.isArray(options) ? options.filter(Boolean) : []
-  const filtered = searchable ? safeOptions.filter(o => o.toLowerCase().includes(search.toLowerCase())) : safeOptions
+  const safeOptions = Array.isArray(options) ? options.filter(Boolean) : [];
+  const filtered = searchable ? safeOptions.filter(o => o.toLowerCase().includes(search.toLowerCase())) : safeOptions;
 
   const displayText = useMemo(() => {
-    if (value.length === 0) return `Pilih ${label}`
-    if (displayMode === 'bullets') return value.map(v => `- ${v}`).join('\n')
+    if (value.length === 0) return `Pilih ${label}`;
+    if (displayMode === 'bullets') return value.map(v => `- ${v}`).join('\n');
 
     return value
       .map(v => {
-        const idx = safeOptions.indexOf(v)
-        return idx >= 0 ? `(${idx + 1}) ${v}` : v
+        const idx = safeOptions.indexOf(v);
+        return idx >= 0 ? `(${idx + 1}) ${v}` : v;
       })
-      .join(', ')
-  }, [value, label, displayMode, safeOptions])
+      .join(', ');
+  }, [value, label, displayMode, safeOptions]);
 
   const toggle = (opt: string) => {
-    setTemp(prev => (prev.includes(opt) ? prev.filter(x => x !== opt) : [...prev, opt]))
-  }
+    setTemp(prev => (prev.includes(opt) ? prev.filter(x => x !== opt) : [...prev, opt]));
+  };
 
   return (
     <>
@@ -1153,8 +1121,9 @@ function PopupMultiSelect({
         </label>
 
         <div
-          className={`mt-2 px-5 py-3 rounded-full flex items-center justify-between border-2 transition
-          ${value.length ? 'border-[#2FA6DE] bg-[#2FA6DE]/5' : 'border-[#2FA6DE]'} hover:bg-[#2FA6DE]/5`}
+          className={`mt-2 px-5 py-3 rounded-full flex items-center justify-between border-2 transition ${
+            value.length ? 'border-[#2FA6DE] bg-[#2FA6DE]/5' : 'border-[#2FA6DE]'
+          } hover:bg-[#2FA6DE]/5`}
         >
           <div className={`flex-1 min-w-0 ${value.length ? '' : 'text-gray-400'}`}>
             <div className="whitespace-pre-line break-words leading-5">{displayText}</div>
@@ -1169,10 +1138,7 @@ function PopupMultiSelect({
 
       {open && (
         <div onClick={() => setOpen(false)} className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center">
-          <div
-            onClick={e => e.stopPropagation()}
-            className="bg-white p-6 rounded-xl w-[700px] max-w-[92vw] max-h-[75vh] flex flex-col"
-          >
+          <div onClick={e => e.stopPropagation()} className="bg-white p-6 rounded-xl w-[700px] max-w-[92vw] max-h-[75vh] flex flex-col">
             <h2 className="font-bold mb-3">{label}</h2>
 
             {searchable && (
@@ -1188,7 +1154,7 @@ function PopupMultiSelect({
 
             <div className="overflow-y-auto flex-1">
               {filtered.map(o => {
-                const selected = temp.includes(o)
+                const selected = temp.includes(o);
                 return (
                   <div
                     key={o}
@@ -1200,17 +1166,17 @@ function PopupMultiSelect({
                     <input type="checkbox" checked={selected} readOnly className="mt-1" />
                     <div className={`${selected ? 'text-blue-600 font-semibold' : ''}`}>{o}</div>
                   </div>
-                )
+                );
               })}
             </div>
 
             <div className="flex items-center justify-between mt-4">
               <button
                 onClick={() => {
-                  onClear()
-                  setTemp([])
-                  setOpen(false)
-                  setSearch('')
+                  onClear();
+                  setTemp([]);
+                  setOpen(false);
+                  setSearch('');
                 }}
                 className="text-red-500"
               >
@@ -1219,9 +1185,9 @@ function PopupMultiSelect({
 
               <button
                 onClick={() => {
-                  onSave(temp)
-                  setOpen(false)
-                  setSearch('')
+                  onSave(temp);
+                  setOpen(false);
+                  setSearch('');
                 }}
                 className="px-6 py-2 rounded-lg bg-[#2FA6DE] text-white"
               >
@@ -1232,19 +1198,19 @@ function PopupMultiSelect({
         </div>
       )}
     </>
-  )
+  );
 }
 
 type InputProps = {
-  label: string
-  value: string
-  type?: string
-  readOnly?: boolean
-  onChange?: (e: ChangeEvent<HTMLInputElement>) => void
-}
+  label: string;
+  value: string;
+  type?: string;
+  readOnly?: boolean;
+  onChange?: (e: ChangeEvent<HTMLInputElement>) => void;
+};
 
 function Input({ label, value, type = 'text', onChange, readOnly = false }: InputProps) {
-  const isDateEmpty = type === 'date' && !value
+  const isDateEmpty = type === 'date' && !value;
 
   return (
     <div>
@@ -1264,5 +1230,5 @@ function Input({ label, value, type = 'text', onChange, readOnly = false }: Inpu
           ${isDateEmpty ? 'text-gray-400' : 'text-black'}`}
       />
     </div>
-  )
+  );
 }
