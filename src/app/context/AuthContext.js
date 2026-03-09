@@ -77,7 +77,7 @@ export const AuthProvider = ({ children }) => {
       // Jika file login Anda ada di: app/login/page.tsx -> gunakan "/login"
       // Jika file login Anda ada di: app/page.tsx (root) -> gunakan "/"
       
-      router.push("/login"); 
+      router.push("/"); 
       router.refresh(); // Membersihkan cache client-side agar state benar-benar segar
     }
   };

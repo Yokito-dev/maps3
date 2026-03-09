@@ -239,7 +239,7 @@ export default function Page() {
                 className={`px-12 py-3 rounded-full text-white ${isFormValid ? 'bg-[#2FA6DE]' : 'bg-gray-400 cursor-not-allowed'
                   }`}
               >
-                Save
+                Submit
               </button>
             </div>
           </div>
