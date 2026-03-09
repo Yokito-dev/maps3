@@ -91,23 +91,77 @@ const MENGAPAJTMDIPELIHARA_LIST: string[] = [
 
 /* ================= HELPERS ================= */
 
+// kompres keras biar aman
 const fileToBase64 = (file: File) =>
   new Promise<{ name: string; type: string; data: string }>((resolve, reject) => {
-    const reader = new FileReader()
-    reader.onload = () => {
-      const res = reader.result as string
-      const base64 = res.split(',')[1]
-      resolve({ name: file.name, type: file.type || 'application/octet-stream', data: base64 })
+    const img = new window.Image()
+    const url = URL.createObjectURL(file)
+
+    img.onload = () => {
+      try {
+        const MAX_W = 700
+        const MAX_BASE64_LEN = 420_000
+
+        const scale = Math.min(1, MAX_W / img.width)
+        const w = Math.round(img.width * scale)
+        const h = Math.round(img.height * scale)
+
+        const canvas = document.createElement('canvas')
+        canvas.width = w
+        canvas.height = h
+        const ctx = canvas.getContext('2d')
+        if (!ctx) throw new Error('Canvas not supported')
+
+        ctx.drawImage(img, 0, 0, w, h)
+
+        let q = 0.6
+        let base64 = canvas.toDataURL('image/jpeg', q).split(',')[1] || ''
+
+        while (base64.length > MAX_BASE64_LEN && q > 0.25) {
+          q -= 0.07
+          base64 = canvas.toDataURL('image/jpeg', q).split(',')[1] || ''
+        }
+
+        URL.revokeObjectURL(url)
+        resolve({
+          name: file.name.replace(/\.\w+$/, '.jpg'),
+          type: 'image/jpeg',
+          data: base64,
+        })
+      } catch (err) {
+        URL.revokeObjectURL(url)
+        reject(err)
+      }
     }
-    reader.onerror = () => reject(reader.error)
-    reader.readAsDataURL(file)
+
+    img.onerror = e => {
+      URL.revokeObjectURL(url)
+      reject(e)
+    }
+
+    img.src = url
   })
+
+async function postToGAS(payload: any) {
+  const r = await fetch(API_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+    body: JSON.stringify(payload),
+  })
+  const data = await r.json().catch(async () => {
+    const t = await r.text()
+    return { status: 'error', message: t }
+  })
+  return data
+}
 
 /* ================= PAGE ================= */
 
 export default function Page() {
   const router = useRouter()
   const [asetRows, setAsetRows] = useState<any[]>([])
+  const [submitting, setSubmitting] = useState(false)
+  const [progress, setProgress] = useState('')
 
   const ULP_LIST = useMemo(() => {
     return Array.from(new Set(asetRows.map(r => r.ulp).filter(Boolean)))
@@ -134,8 +188,6 @@ export default function Page() {
   const handleChange = (key: keyof typeof form, val: string) => {
     setForm(p => ({ ...p, [key]: val }))
   }
-
-  /* ================= FOTO ================= */
 
   const [fotoSebelum, setFotoSebelum] = useState<File[]>([])
   const [fotoProses, setFotoProses] = useState<File[]>([])
@@ -178,36 +230,67 @@ export default function Page() {
     )
   }, [asetRows, form.zonaProteksi])
 
-  // ✅ TEST MODE: foto boleh kosong (tidak mempengaruhi validasi)
+  // foto boleh kosong
   const isFormValid = Object.values(form).every(v => String(v).trim() !== '')
 
-  /* ================= SUBMIT ================= */
+  useEffect(() => {
+    fetch(API_URL)
+      .then(r => r.json())
+      .then(res => setAsetRows(Array.isArray(res) ? res : []))
+      .catch(() => setAsetRows([]))
+  }, [])
+
+  useEffect(() => {
+    if (!form.ulp || !form.penyulang || !form.zonaProteksi || !form.section) {
+      setForm(p => ({ ...p, panjangKms: '' }))
+      return
+    }
+
+    const row = asetRows.find(r =>
+      String(r.ulp).trim() === form.ulp.trim() &&
+      String(r.penyulang).trim() === form.penyulang.trim() &&
+      String(r.zona).trim() === form.zonaProteksi.trim() &&
+      String(r.section).trim() === form.section.trim()
+    )
+
+    setForm(p => ({ ...p, panjangKms: row?.kms != null ? String(row.kms) : '' }))
+  }, [form.ulp, form.penyulang, form.zonaProteksi, form.section, asetRows])
 
   const handleSubmit = async () => {
+    if (!isFormValid || submitting) return
+    setSubmitting(true)
+    setProgress('Membuat row...')
+
     try {
-      // ✅ foto boleh kosong, tapi kalau ada tetap dikirim (dibatasi max 2/1/2 seperti sebelumnya)
-      const payload = {
-        type: 'pemeliharaan',
-        ...form,
-        fotoSebelum: await Promise.all((fotoSebelum || []).slice(0, 2).map(fileToBase64)),
-        fotoProses: await Promise.all((fotoProses || []).slice(0, 1).map(fileToBase64)),
-        fotoSesudah: await Promise.all((fotoSesudah || []).slice(0, 2).map(fileToBase64)),
+      // 1) create row dulu
+      const createRes = await postToGAS({ type: 'pemeliharaan_create', ...form })
+      if (createRes?.status !== 'success' || !createRes?.row) {
+        throw new Error(createRes?.message || 'Gagal create row')
+      }
+      const row = Number(createRes.row)
+
+      // 2) upload foto satu-satu
+      const tasks: Array<{ slot: string; file: File }> = []
+      if (fotoSebelum[0]) tasks.push({ slot: 'sebelum1', file: fotoSebelum[0] })
+      if (fotoSebelum[1]) tasks.push({ slot: 'sebelum2', file: fotoSebelum[1] })
+      if (fotoProses[0]) tasks.push({ slot: 'proses', file: fotoProses[0] })
+      if (fotoSesudah[0]) tasks.push({ slot: 'sesudah1', file: fotoSesudah[0] })
+      if (fotoSesudah[1]) tasks.push({ slot: 'sesudah2', file: fotoSesudah[1] })
+
+      for (let i = 0; i < tasks.length; i++) {
+        const t = tasks[i]
+        setProgress(`Upload foto ${i + 1}/${tasks.length} (${t.slot})...`)
+        const b64 = await fileToBase64(t.file)
+        const upRes = await postToGAS({ type: 'pemeliharaan_upload', row, slot: t.slot, file: b64 })
+        if (upRes?.status !== 'success') {
+          throw new Error(upRes?.message || `Gagal upload ${t.slot}`)
+        }
       }
 
-      const res = await fetch(API_URL, {
-        method: 'POST',
-        body: JSON.stringify(payload),
-      })
+      setProgress('')
+      alert('BERHASIL! Row masuk + foto masuk Drive + link muncul di kolom S-W.')
 
-      const json = await res.json().catch(() => null)
-      if (!res.ok || json?.status !== 'success') {
-        alert(`Gagal: ${json?.message || 'Unknown error'}`)
-        return
-      }
-
-      alert('Berhasil dikirim')
-
-      // reset (optional)
+      // reset
       setForm(p => ({
         ...p,
         ulp: '',
@@ -230,48 +313,20 @@ export default function Page() {
       setFotoSesudah([])
       setShowMap(false)
     } catch (e: any) {
-      alert(`Error submit: ${e?.message || String(e)}`)
+      setProgress('')
+      alert(`Gagal: ${e?.message || String(e)}\nCek log: ${API_URL}?type=logs`)
+    } finally {
+      setSubmitting(false)
     }
   }
 
-  useEffect(() => {
-    fetch(API_URL)
-      .then(r => r.json())
-      .then(res => {
-        setAsetRows(Array.isArray(res) ? res : [])
-      })
-      .catch(() => setAsetRows([]))
-  }, [])
-
-  useEffect(() => {
-    if (!form.ulp || !form.penyulang || !form.zonaProteksi || !form.section) {
-      setForm(p => ({ ...p, panjangKms: '' }))
-      return
-    }
-
-    const row = asetRows.find(r =>
-      String(r.ulp).trim() === form.ulp.trim() &&
-      String(r.penyulang).trim() === form.penyulang.trim() &&
-      String(r.zona).trim() === form.zonaProteksi.trim() &&
-      String(r.section).trim() === form.section.trim()
-    )
-
-    if (row?.kms !== undefined && row?.kms !== null) {
-      setForm(p => ({ ...p, panjangKms: String(row.kms) }))
-    } else {
-      setForm(p => ({ ...p, panjangKms: '' }))
-    }
-  }, [form.ulp, form.penyulang, form.zonaProteksi, form.section, asetRows])
-
   return (
     <div className="h-screen overflow-hidden font-poppins flex flex-col">
-      {/* BACKGROUND */}
       <div className="fixed inset-0 -z-10">
         <Image src={bg} alt="Background" fill className="object-cover" priority />
       </div>
       <div className="fixed inset-0 -z-10 bg-gradient-to-t from-[#165F67]/70 via-[#67C2E9]/30 to-transparent backdrop-blur-sm" />
 
-      {/* HEADER */}
       <div className="px-4 pt-3">
         <div className="bg-white rounded-full shadow px-6 py-2 flex items-center gap-3">
           <button onClick={() => router.push('/menu')}>
@@ -282,24 +337,16 @@ export default function Page() {
         </div>
       </div>
 
-      {/* CONTENT */}
       <main className="flex-1 flex justify-center items-start px-0 pt-4 md:p-4 overflow-hidden">
-        <div
-          className="
-            bg-white shadow-xl w-full
-            flex flex-col h-full overflow-hidden
-            rounded-t-[28px] rounded-b-none
-            px-5 py-6
-            md:h-[82vh]
-            md:rounded-3xl
-            md:p-10
-            md:max-w-[1200px]
-          "
-        >
+        <div className="bg-white shadow-xl w-full flex flex-col h-full overflow-hidden rounded-t-[28px] rounded-b-none px-5 py-6 md:h-[82vh] md:rounded-3xl md:p-10 md:max-w-[1200px]">
           <div className="flex-1 overflow-y-auto pr-4">
-            {/* FORM UTAMA */}
+            {!!progress && (
+              <div className="mb-4 text-sm text-blue-700 bg-blue-50 border border-blue-100 rounded-lg px-4 py-2">
+                {progress}
+              </div>
+            )}
+
             <div className="w-full grid grid-cols-1 md:grid-cols-2 gap-x-10 gap-y-6">
-              {/* KIRI */}
               <div className="flex flex-col gap-6">
                 <Input label="UP3" value={form.up3} readOnly />
 
@@ -351,11 +398,7 @@ export default function Page() {
                   onClear={() => handleChange('section', '')}
                 />
 
-                <NumberStepper
-                  label="Panjang Km/s"
-                  value={form.panjangKms}
-                  onChange={v => handleChange('panjangKms', v)}
-                />
+                <NumberStepper label="Panjang Km/s" value={form.panjangKms} onChange={v => handleChange('panjangKms', v)} />
 
                 <PopupSelect
                   label="Mengapa JTM dipelihara?"
@@ -367,7 +410,6 @@ export default function Page() {
                 />
               </div>
 
-              {/* KANAN */}
               <div className="flex flex-col gap-6">
                 <PopupSelect
                   label="Apa yang dilakukan?"
@@ -394,33 +436,14 @@ export default function Page() {
                   onClear={() => handleChange('dieksekusiOleh', '')}
                 />
 
-                <NumberStepper
-                  label="Jumlah item material"
-                  value={form.jumlahItemMaterial}
-                  onChange={v => handleChange('jumlahItemMaterial', v)}
-                />
+                <NumberStepper label="Jumlah item material" value={form.jumlahItemMaterial} onChange={v => handleChange('jumlahItemMaterial', v)} />
+                <NumberStepper label="Nilai Tahanan Isolasi Sesudah" value={form.NilaiTahananIsolasiSesudah} onChange={v => handleChange('NilaiTahananIsolasiSesudah', v)} />
+                <NumberStepper label="Nilai Pentanahan Setelah Perbaikan" value={form.nilaiPertanahan} onChange={v => handleChange('nilaiPertanahan', v)} />
 
-                <NumberStepper
-                  label="Nilai Tahanan Isolasi Sesudah"
-                  value={form.NilaiTahananIsolasiSesudah}
-                  onChange={v => handleChange('NilaiTahananIsolasiSesudah', v)}
-                />
-
-                <NumberStepper
-                  label="Nilai Pentanahan Setelah Perbaikan"
-                  value={form.nilaiPertanahan}
-                  onChange={v => handleChange('nilaiPertanahan', v)}
-                />
-
-                <Input
-                  label="Keterangan"
-                  value={form.keterangan}
-                  onChange={e => handleChange('keterangan', e.target.value)}
-                />
+                <Input label="Keterangan" value={form.keterangan} onChange={e => handleChange('keterangan', e.target.value)} />
               </div>
             </div>
 
-            {/* KOORDINAT */}
             <div className="mt-10 w-full">
               <label className="text-sm font-semibold">
                 Koordinat <span className="text-red-500">*</span>
@@ -452,40 +475,16 @@ export default function Page() {
               )}
             </div>
 
-            {/* FOTO */}
             <div className="mt-10 grid grid-cols-1 md:grid-cols-3 gap-8">
-              <MultiUploadPreview label="Foto Sebelum" files={fotoSebelum} setFiles={setFotoSebelum} />
-              <MultiUploadPreview label="Foto Proses Pekerjaan" files={fotoProses} setFiles={setFotoProses} />
-              <MultiUploadPreview label="Foto Sesudah" files={fotoSesudah} setFiles={setFotoSesudah} />
+              <MultiUploadPreview label="Foto Sebelum (maks 2)" files={fotoSebelum} setFiles={setFotoSebelum} />
+              <MultiUploadPreview label="Foto Proses (maks 1)" files={fotoProses} setFiles={setFotoProses} />
+              <MultiUploadPreview label="Foto Sesudah (maks 2)" files={fotoSesudah} setFiles={setFotoSesudah} />
             </div>
 
-            {/* ACTION */}
             <div className="flex gap-4 mt-12 justify-center">
               <button
                 type="button"
-                onClick={() => {
-                  setForm(p => ({
-                    ...p,
-                    ulp: '',
-                    penyulang: '',
-                    zonaProteksi: '',
-                    section: '',
-                    panjangKms: '0',
-                    alasan: '',
-                    pemeliharaan: '',
-                    tanggalPemeliharaan: '',
-                    dieksekusiOleh: '',
-                    jumlahItemMaterial: '0',
-                    NilaiTahananIsolasiSesudah: '0',
-                    nilaiPertanahan: '0',
-                    keterangan: '',
-                    koordinat: '',
-                  }))
-                  setFotoSebelum([])
-                  setFotoProses([])
-                  setFotoSesudah([])
-                  setShowMap(false)
-                }}
+                onClick={() => router.push('/menu')}
                 className="px-12 py-3 bg-red-500 text-white rounded-full"
               >
                 Cancel
@@ -494,12 +493,12 @@ export default function Page() {
               <button
                 type="button"
                 onClick={handleSubmit}
-                disabled={!isFormValid}
+                disabled={!isFormValid || submitting}
                 className={`px-12 py-3 rounded-full text-white ${
-                  isFormValid ? 'bg-[#2FA6DE]' : 'bg-gray-400 cursor-not-allowed'
+                  isFormValid && !submitting ? 'bg-[#2FA6DE]' : 'bg-gray-400 cursor-not-allowed'
                 }`}
               >
-                Submit
+                {submitting ? 'Submitting...' : 'Submit'}
               </button>
             </div>
           </div>
@@ -562,7 +561,6 @@ type MultiUploadPreviewProps = {
 
 function MultiUploadPreview({ label, files, setFiles }: MultiUploadPreviewProps) {
   const [open, setOpen] = useState<number | null>(null)
-
   const previews = useMemo(() => files.map(f => URL.createObjectURL(f)), [files])
 
   useEffect(() => {
@@ -574,14 +572,11 @@ function MultiUploadPreview({ label, files, setFiles }: MultiUploadPreviewProps)
   return (
     <>
       <div>
-        <label className="text-sm font-semibold">
-          {label} <span className="text-red-500">*</span>
-        </label>
+        <label className="text-sm font-semibold">{label}</label>
 
         <div className="relative mt-2 h-[220px] border-2 border-dashed border-[#2FA6DE] rounded-2xl flex flex-wrap items-center justify-center gap-2 p-2">
           {previews.map((src, i) => (
             <div key={i} className="relative h-20 w-20">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
                 src={src}
                 className="h-full w-full object-cover rounded cursor-pointer"
@@ -620,7 +615,6 @@ function MultiUploadPreview({ label, files, setFiles }: MultiUploadPreviewProps)
           onClick={() => setOpen(null)}
           className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center"
         >
-          {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src={previews[open]} className="max-w-[90vw] max-h-[90vh] rounded-xl" alt="preview-large" />
         </div>
       )}

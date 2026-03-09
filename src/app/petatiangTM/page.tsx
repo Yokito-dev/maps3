@@ -4,7 +4,7 @@ import dynamic from "next/dynamic";
 import { useEffect, useMemo, useState } from "react";
 import "leaflet/dist/leaflet.css";
 import type { Map as LeafletMap } from "leaflet";
-import { useMap } from "react-leaflet"; 
+import { useMap } from "react-leaflet";
 
 const MapContainer = dynamic(() => import("react-leaflet").then((m) => m.MapContainer), {
   ssr: false,
@@ -19,9 +19,11 @@ const Polyline = dynamic(() => import("react-leaflet").then((m) => m.Polyline), 
 const API_URL =
   "https://script.google.com/macros/s/AKfycbzepwwrEGzsTzMtJgccrjLrvKpNTptAzAXP_1E_wOhdOq-Zyx2gZ8NHYR98LGCDAKYw0w/exec";
 
+const ULP_NOTICE_TOO_MANY = "Pilih satu ulp untuk menampilkaan jarak antar tiang";
+
 type Point = {
   rowId: number;
-  ulp: string; 
+  ulp: string;
   formattedAddress: string;
   streetAddress: string;
   city: string;
@@ -30,8 +32,8 @@ type Point = {
   longitude: number;
 };
 
-type LatLng = [number, number]; 
-type Segment = [LatLng, LatLng]; 
+type LatLng = [number, number];
+type Segment = [LatLng, LatLng];
 
 function haversineKmLatLng(a: { lat: number; lng: number }, b: { lat: number; lng: number }) {
   const R = 6371;
@@ -56,14 +58,6 @@ function segmentsTotalKm(segs: Segment[]) {
     total += haversineKmLatLng(a, b);
   }
   return total;
-}
-
-function formatTitle(p: Point) {
-  const addr = (p.formattedAddress || p.streetAddress || "").toString().trim();
-  const ulp = (p.ulp || "-").toString().trim();
-  const owner = (p.owner || "-").toString().trim();
-  if (addr) return `${ulp} | ${owner} — ${addr}`;
-  return `${ulp} | ${owner}`;
 }
 
 /** ✅ FIX: pengganti whenCreated di react-leaflet v4 */
@@ -100,12 +94,11 @@ class DSU {
     return true;
   }
 }
- 
+
 function buildMSTSegments(points: Point[], cutoffMeters: number, kNearest = 6): Segment[] {
   const n = points.length;
   if (n < 2) return [];
 
-  // --- proyeksi kasar lat/lng -> meter ---
   const lat0 = points.reduce((s, p) => s + p.latitude, 0) / n;
   const lat0Rad = (lat0 * Math.PI) / 180;
   const mPerDegLat = 110574;
@@ -129,7 +122,6 @@ function buildMSTSegments(points: Point[], cutoffMeters: number, kNearest = 6): 
     if (ys[i] > maxY) maxY = ys[i];
   }
 
-  // cell agak lebih besar biar grid gak terlalu padat & bridging lebih murah
   const cell = Math.max(500, Math.min(2000, Math.floor(cutoffMeters / 2) || 1000));
   const key = (cx: number, cy: number) => `${cx}|${cy}`;
 
@@ -142,14 +134,13 @@ function buildMSTSegments(points: Point[], cutoffMeters: number, kNearest = 6): 
     grid.get(k)!.push(i);
   }
 
-  type Edge = { i: number; j: number; d: number }; // d dalam meter (aproks)
+  type Edge = { i: number; j: number; d: number };
   const edges: Edge[] = [];
   const seen = new Set<string>();
 
   const rCells = Math.max(1, Math.ceil(cutoffMeters / cell));
   const fallbackR = Math.max(rCells + 2, 12);
 
-  // --- Tahap 1: kandidat edge dekat-dekat (soft cutoff) ---
   for (let i = 0; i < n; i++) {
     const cx = Math.floor(xs[i] / cell);
     const cy = Math.floor(ys[i] / cell);
@@ -177,15 +168,12 @@ function buildMSTSegments(points: Point[], cutoffMeters: number, kNearest = 6): 
       }
     };
 
-    // 1) ambil yang dalam cutoff dulu (biar garis rapi)
     scanSquare(rCells, true);
 
-    // 2) kalau kandidat kurang, tambah jangkauan (biar titik gak sendirian)
     if (candidates.length < Math.min(kNearest, n - 1)) {
       scanSquare(fallbackR, false);
     }
 
-    // 3) fallback brute nearest kalau masih kosong (sangat jarang)
     if (!candidates.length) {
       let bestJ = -1;
       let bestD = Infinity;
@@ -230,7 +218,6 @@ function buildMSTSegments(points: Point[], cutoffMeters: number, kNearest = 6): 
     }
   }
 
-  // --- Tahap 2: bridging antar komponen biar selalu nyambung ---
   const buildCompMembers = () => {
     const m = new Map<number, number[]>();
     for (let i = 0; i < n; i++) {
@@ -241,7 +228,6 @@ function buildMSTSegments(points: Point[], cutoffMeters: number, kNearest = 6): 
     return m;
   };
 
-  // batas radius scan grid (dalam satuan cell) biar gak liar banget
   const maxRCap = Math.min(200, Math.ceil(Math.max(maxX - minX, maxY - minY) / cell) + 2);
 
   const nearestDifferentComponent = (i: number, rootI: number): Edge | null => {
@@ -272,11 +258,9 @@ function buildMSTSegments(points: Point[], cutoffMeters: number, kNearest = 6): 
         }
       }
 
-      // early stop kalau radius sekarang sudah lebih jauh dari bestD
       if (foundAny && r * cell > bestD) break;
     }
 
-    // brute fallback kalau bener-bener gak ketemu (jarang)
     if (bestJ === -1) {
       for (let j = 0; j < n; j++) {
         if (j === i) continue;
@@ -294,7 +278,6 @@ function buildMSTSegments(points: Point[], cutoffMeters: number, kNearest = 6): 
     return { i, j: bestJ, d: bestD };
   };
 
-  // Boruvka-style bridging (sampling biar tetap ringan)
   for (let loop = 0; loop < 12 && segs.length < n - 1; loop++) {
     const comps = buildCompMembers();
     if (comps.size <= 1) break;
@@ -614,7 +597,7 @@ export default function MapsPage() {
 
     if (!selectedUlp && points.length > 3500) {
       return {
-        notice: "Titik terlalu banyak untuk gambar garis semua ULP. Pilih 1 ULP dulu ya.",
+        notice: ULP_NOTICE_TOO_MANY,
         segments: [] as Segment[],
         totalKm: 0,
       };
@@ -663,7 +646,6 @@ export default function MapsPage() {
           boxShadow: "0px 2px 10px rgba(0,0,0,0.2)",
           fontSize: 13,
 
-          // ✅ SCROLL kalau konten kepanjangan
           maxHeight: "calc(100vh - 40px)",
           overflowY: "auto",
           overflowX: "hidden",
@@ -694,7 +676,7 @@ export default function MapsPage() {
 
         {/* FILTER ULP */}
         <div style={{ marginTop: 10 }}>
-          <div style={{ fontWeight: 600, marginBottom: 6 }}>ULP (kolom C / CXUNI)</div>
+          <div style={{ fontWeight: 600, marginBottom: 6 }}>ULP</div>
           <select
             value={selectedUlp}
             onChange={(e) => setSelectedUlp(e.target.value)}
@@ -725,7 +707,7 @@ export default function MapsPage() {
         {/* GARIS ULP */}
         <div style={{ marginTop: 14, paddingTop: 12, borderTop: "1px solid #eee" }}>
           <div style={{ display: "flex", justifyContent: "space-between", gap: 8 }}>
-            <b>Garis ULP (auto nyambung)</b>
+            <b>Garis ULP</b>
             <label style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer" }}>
               <input
                 type="checkbox"
@@ -736,10 +718,6 @@ export default function MapsPage() {
             </label>
           </div>
 
-          <div style={{ marginTop: 6, fontSize: 12, color: "#555" }}>
-            Garis akan diusahakan <b>nyambung terus</b> per ULP (cutoff untuk prioritas yang dekat dulu).
-          </div>
-
           <div style={{ display: "flex", gap: 10, marginTop: 10, alignItems: "center" }}>
             <label style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer" }}>
               <input
@@ -747,7 +725,7 @@ export default function MapsPage() {
                 checked={autoCutoff}
                 onChange={(e) => setAutoCutoff(e.target.checked)}
               />
-              Auto batas (prioritas jarak dekat)
+              Auto batas
             </label>
             <div style={{ marginLeft: "auto", fontSize: 12, color: "#444" }}>
               cutoff: <b>{effectiveCutoffMeters} m</b>
@@ -898,7 +876,6 @@ export default function MapsPage() {
         preferCanvas
         style={{ height: "100%", width: "100%" }}
       >
-        {/* ✅ SET MAP INSTANCE (pengganti whenCreated) */}
         <MapSetter onReady={setMap} />
 
         {selectedBase === "normal" ? (
@@ -924,10 +901,7 @@ export default function MapsPage() {
         )}
 
         {roadLine.length > 1 && (
-          <Polyline
-            positions={roadLine}
-            pathOptions={{ color: "#d32f2f", weight: 4, opacity: 0.9 }}
-          />
+          <Polyline positions={roadLine} pathOptions={{ color: "#d32f2f", weight: 4, opacity: 0.9 }} />
         )}
 
         {points.map((d) => {
@@ -987,7 +961,13 @@ export default function MapsPage() {
             >
               <Tooltip>
                 <div style={{ fontSize: 12 }}>
-                  <b>{d.ulp || "-"}</b> | {d.owner || "-"}
+                  <b>{d.ulp || "-"}</b>
+                  {d.owner ? (
+                    <>
+                      <br />
+                      <span style={{ color: "#444" }}>{d.owner}</span>
+                    </>
+                  ) : null}
                   <br />
                   {d.formattedAddress || "-"}
                   {isInMeasure ? (

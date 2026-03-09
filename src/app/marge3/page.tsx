@@ -65,7 +65,9 @@ function jsonp<T>(url: string, timeoutMs = 15000): Promise<T> {
     }
 
     const sep = url.includes("?") ? "&" : "?";
-    script.src = `${url}${sep}mode=merge3&up3=${encodeURIComponent(UP3)}&callback=${cbName}`;
+    script.src = `${url}${sep}mode=merge3&up3=${encodeURIComponent(
+      UP3
+    )}&callback=${cbName}`;
     script.onerror = () => {
       cleanup();
       reject(new Error("JSONP load error"));
@@ -167,12 +169,49 @@ const ClientOnlyMap = dynamic(
     const { MapContainer, TileLayer, CircleMarker, Tooltip, Rectangle, Polyline } =
       await import("react-leaflet");
 
-    const { useEffect, useMemo, useRef, useState } = React;
+    const { useEffect, useMemo, useRef, useState, useCallback } = React;
 
     return function MapPage() {
       const [points, setPoints] = useState<Point[]>([]);
       const [selA, setSelA] = useState<Sel | null>(null);
       const [selB, setSelB] = useState<Sel | null>(null);
+
+      // ===== FILTER KATEGORI (checkbox) =====
+      const kategoriList = useMemo(() => {
+        const s = new Set<string>();
+        for (const p of points) s.add(p.kategori || "OTHER");
+        return Array.from(s).sort();
+      }, [points]);
+
+      const [enabledKategori, setEnabledKategori] = useState<Record<string, boolean>>({});
+
+      // init / menjaga kategori baru agar default true
+      useEffect(() => {
+        setEnabledKategori((prev) => {
+          const next: Record<string, boolean> = {};
+          for (const k of kategoriList) next[k] = prev[k] ?? true;
+          return next;
+        });
+      }, [kategoriList]);
+
+      const toggleKategori = (k: string) => {
+        setEnabledKategori((prev) => ({ ...prev, [k]: !(prev[k] ?? true) }));
+      };
+
+      const setAllKategori = (val: boolean) => {
+        setEnabledKategori(() => {
+          const next: Record<string, boolean> = {};
+          for (const k of kategoriList) next[k] = val;
+          return next;
+        });
+      };
+
+      const visiblePoints = useMemo(() => {
+        if (!points.length) return points;
+        // kalau enabledKategori masih kosong (awal load), tampilkan semua
+        if (!Object.keys(enabledKategori).length) return points;
+        return points.filter((p) => enabledKategori[p.kategori || "OTHER"] !== false);
+      }, [points, enabledKategori]);
 
       // jarak jalan (OSRM)
       const [roadMeters, setRoadMeters] = useState<number | null>(null);
@@ -204,15 +243,27 @@ const ClientOnlyMap = dynamic(
       };
 
       const center = useMemo<[number, number]>(() => {
-        if (!points.length) return [-5.1477, 119.4327];
-        return [points[0].latitude, points[0].longitude];
-      }, [points]);
+        if (!visiblePoints.length) return [-5.1477, 119.4327];
+        return [visiblePoints[0].latitude, visiblePoints[0].longitude];
+      }, [visiblePoints]);
 
-      const counts = useMemo(() => {
+      const totalCounts = useMemo(() => {
         const c: Record<string, number> = {};
-        for (const p of points) c[p.kategori] = (c[p.kategori] || 0) + 1;
+        for (const p of points) {
+          const k = p.kategori || "OTHER";
+          c[k] = (c[k] || 0) + 1;
+        }
         return c;
       }, [points]);
+
+      const visibleCounts = useMemo(() => {
+        const c: Record<string, number> = {};
+        for (const p of visiblePoints) {
+          const k = p.kategori || "OTHER";
+          c[k] = (c[k] || 0) + 1;
+        }
+        return c;
+      }, [visiblePoints]);
 
       const pointToSel = (p: Point, idx: number): Sel => {
         const first = p.items?.[0];
@@ -230,15 +281,15 @@ const ClientOnlyMap = dynamic(
       const grouped = useMemo(() => {
         const g: Record<string, { lat: number; lng: number; label: string; refKey: string }[]> =
           {};
-        for (let i = 0; i < points.length; i++) {
-          const p = points[i];
+        for (let i = 0; i < visiblePoints.length; i++) {
+          const p = visiblePoints[i];
           const k = p.kategori || "OTHER";
           if (!g[k]) g[k] = [];
           const sel = pointToSel(p, i);
           g[k].push({ lat: sel.lat, lng: sel.lng, label: sel.label, refKey: sel.key });
         }
         return g;
-      }, [points]);
+      }, [visiblePoints]);
 
       const mstByKategori = useMemo(() => {
         const out: Record<string, { a: number; b: number; dist: number }[]> = {};
@@ -256,7 +307,7 @@ const ClientOnlyMap = dynamic(
 
       const rataRataByKategori = useMemo(() => {
         const out: Record<string, number | null> = {};
-        for (const k of Object.keys(grouped)) {
+        for (const k of kategoriList) {
           const edges = mstByKategori[k] || [];
           if (!edges.length) {
             out[k] = null;
@@ -266,7 +317,7 @@ const ClientOnlyMap = dynamic(
           out[k] = sum / edges.length;
         }
         return out;
-      }, [grouped, mstByKategori]);
+      }, [kategoriList, mstByKategori]);
 
       const lurusMeters = useMemo(() => {
         if (!selA || !selB) return null;
@@ -280,7 +331,7 @@ const ClientOnlyMap = dynamic(
         setSelB(null);
       };
 
-      const resetPick = () => {
+      const resetPick = useCallback(() => {
         setSelA(null);
         setSelB(null);
         setRoadMeters(null);
@@ -289,7 +340,13 @@ const ClientOnlyMap = dynamic(
         setRoadError(null);
         setRoadLoading(false);
         if (abortRef.current) abortRef.current.abort();
-      };
+      }, []);
+
+      // kalau kategori A/B dimatiin -> reset biar konsisten
+      useEffect(() => {
+        if (selA && enabledKategori[selA.kategori] === false) resetPick();
+        if (selB && enabledKategori[selB.kategori] === false) resetPick();
+      }, [enabledKategori, selA, selB, resetPick]);
 
       // ===== OSRM =====
       const buildOsrmKey = (a: Sel, b: Sel) => {
@@ -364,6 +421,10 @@ const ClientOnlyMap = dynamic(
         // eslint-disable-next-line react-hooks/exhaustive-deps
       }, [selA?.key, selB?.key]);
 
+      const enabledCount = useMemo(() => {
+        return kategoriList.filter((k) => enabledKategori[k] !== false).length;
+      }, [kategoriList, enabledKategori]);
+
       return (
         <div style={{ height: "100vh", width: "100%", position: "relative" }}>
           {/* ✅ kotak putih kanan atas (lebih lebar) */}
@@ -377,7 +438,7 @@ const ClientOnlyMap = dynamic(
               borderRadius: 10,
               padding: "12px 14px",
               boxShadow: "0 6px 18px rgba(0,0,0,0.18)",
-              width: 380,
+              width: 420,
               maxWidth: "calc(100vw - 24px)",
               fontSize: 13,
             }}
@@ -385,43 +446,110 @@ const ClientOnlyMap = dynamic(
             <div style={{ fontWeight: 700, marginBottom: 6 }}>Ringkasan Titik</div>
             <div style={{ opacity: 0.8, marginBottom: 10 }}>{UP3}</div>
 
-            {Object.keys(counts)
-              .sort()
-              .map((k) => (
-                <div
-                  key={k}
-                  style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}
-                >
-                  <span
-                    style={{
-                      width: 10,
-                      height: 10,
-                      borderRadius: 2,
-                      background: colorByKategori[k] || "#666",
-                      display: "inline-block",
-                    }}
-                  />
-                  <span style={{ flex: 1 }}>{k}</span>
-                  <b>{counts[k]}</b>
+            {/* ✅ FILTER CHECKBOX */}
+            <div style={{ marginBottom: 10, paddingBottom: 10, borderBottom: "1px solid #eee" }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                <div style={{ fontWeight: 700 }}>Filter Kategori</div>
+                <div style={{ fontSize: 12, opacity: 0.75 }}>
+                  aktif: <b>{enabledCount}</b>/{kategoriList.length || 0}
                 </div>
-              ))}
+              </div>
 
-            <div style={{ marginTop: 10, fontSize: 12, opacity: 0.85 }}>
-              <b>Rata-rata</b> jarak (lurus/MST):
-            </div>
-            {Object.keys(counts)
-              .sort()
-              .map((k) => (
-                <div
-                  key={`avg-${k}`}
-                  style={{ display: "flex", gap: 10, fontSize: 12, marginTop: 4 }}
+              <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+                <button
+                  onClick={() => setAllKategori(true)}
+                  style={{
+                    fontSize: 12,
+                    padding: "6px 10px",
+                    borderRadius: 8,
+                    border: "1px solid #ddd",
+                    background: "white",
+                    cursor: "pointer",
+                  }}
                 >
-                  <span style={{ width: 46, opacity: 0.8 }}>{k}</span>
-                  <span style={{ opacity: 0.9 }}>
-                    {rataRataByKategori[k] == null ? "-" : fmtKm(rataRataByKategori[k] as number)}
-                  </span>
-                </div>
-              ))}
+                  Semua
+                </button>
+                <button
+                  onClick={() => setAllKategori(false)}
+                  style={{
+                    fontSize: 12,
+                    padding: "6px 10px",
+                    borderRadius: 8,
+                    border: "1px solid #ddd",
+                    background: "white",
+                    cursor: "pointer",
+                  }}
+                >
+                  Kosongkan
+                </button>
+              </div>
+
+              <div style={{ marginTop: 10 }}>
+                {kategoriList.length ? (
+                  kategoriList.map((k) => {
+                    const checked = enabledKategori[k] !== false;
+                    const c = colorByKategori[k] || "#666";
+                    const v = visibleCounts[k] || 0;
+                    const t = totalCounts[k] || 0;
+                    return (
+                      <label
+                        key={`chk-${k}`}
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 10,
+                          marginBottom: 6,
+                          cursor: "pointer",
+                          userSelect: "none",
+                        }}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          onChange={() => toggleKategori(k)}
+                          style={{ cursor: "pointer" }}
+                        />
+                        <span
+                          style={{
+                            width: 10,
+                            height: 10,
+                            borderRadius: 2,
+                            background: c,
+                            display: "inline-block",
+                          }}
+                        />
+                        <span style={{ flex: 1 }}>{k}</span>
+                        <b>
+                          {v}/{t}
+                        </b>
+                      </label>
+                    );
+                  })
+                ) : (
+                  <div style={{ fontSize: 12, opacity: 0.75 }}>Belum ada data…</div>
+                )}
+              </div>
+            </div>
+
+            {/* ringkasan counts (yang tampil) */}
+            <div style={{ fontSize: 12, opacity: 0.85 }}>
+              <b>Rata-rata</b> jarak (lurus/MST) — yang tampil:
+            </div>
+            {kategoriList.map((k) => (
+              <div
+                key={`avg-${k}`}
+                style={{ display: "flex", gap: 10, fontSize: 12, marginTop: 4, opacity: enabledKategori[k] === false ? 0.5 : 1 }}
+              >
+                <span style={{ width: 46, opacity: 0.8 }}>{k}</span>
+                <span style={{ opacity: 0.9 }}>
+                  {enabledKategori[k] === false
+                    ? "-"
+                    : rataRataByKategori[k] == null
+                    ? "-"
+                    : fmtKm(rataRataByKategori[k] as number)}
+                </span>
+              </div>
+            ))}
 
             <div style={{ marginTop: 12, paddingTop: 10, borderTop: "1px solid #eee" }}>
               <div style={{ fontWeight: 700, marginBottom: 6 }}>Jarak Titik</div>
@@ -485,7 +613,7 @@ const ClientOnlyMap = dynamic(
               url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
             />
 
-            {/* ✅ garis MST per kategori */}
+            {/* ✅ garis MST per kategori (yang tampil) */}
             {Object.keys(mstByKategori).map((k) => {
               const pts = grouped[k];
               const edges = mstByKategori[k] || [];
@@ -511,8 +639,20 @@ const ClientOnlyMap = dynamic(
                         pathOptions={{ color: c, weight: 2, opacity: 0.7 }}
                         eventHandlers={{
                           click: () => {
-                            setSelA({ key: a.refKey, kategori: k, lat: a.lat, lng: a.lng, label: a.label });
-                            setSelB({ key: b.refKey, kategori: k, lat: b.lat, lng: b.lng, label: b.label });
+                            setSelA({
+                              key: a.refKey,
+                              kategori: k,
+                              lat: a.lat,
+                              lng: a.lng,
+                              label: a.label,
+                            });
+                            setSelB({
+                              key: b.refKey,
+                              kategori: k,
+                              lat: b.lat,
+                              lng: b.lng,
+                              label: b.label,
+                            });
                           },
                         }}
                       >
@@ -544,8 +684,8 @@ const ClientOnlyMap = dynamic(
               />
             ) : null}
 
-            {/* ✅ marker + kotak */}
-            {points.map((p, idx) => {
+            {/* ✅ marker + kotak (yang tampil) */}
+            {visiblePoints.map((p, idx) => {
               const c = colorByKategori[p.kategori] || "#666";
 
               const dLat = metersToDeltaLat(BOX_SIZE_METERS);
