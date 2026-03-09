@@ -6,10 +6,10 @@ import Image from 'next/image'
 import { IoArrowBack, IoChevronDown, IoClose, IoLocationSharp } from 'react-icons/io5'
 import { useRouter } from 'next/navigation'
 
-const MapPicker = dynamic(() => import('../components/MapPicker'), { ssr: false })
-
 import bg from '@/app/assets/plnup3/bgnogradient.png'
 import plnKecil from '@/app/assets/plnup3/plnkecil.svg'
+
+const MapPicker = dynamic(() => import('../components/MapPicker'), { ssr: false })
 
 const API_URL =
   'https://script.google.com/macros/s/AKfycbyCxXZWyPBCJsyuLZpeynkr6V5FGCsLZopQaUQTPRIMKA6vpXriueq26O1n-SrsK_ALfA/exec'
@@ -230,7 +230,10 @@ export default function Page() {
     )
   }, [asetRows, form.zonaProteksi])
 
+<<<<<<< HEAD
   // foto boleh kosong
+=======
+>>>>>>> 97d8d466e1e4d2410e6fc725e89bef09a4963156
   const isFormValid = Object.values(form).every(v => String(v).trim() !== '')
 
   useEffect(() => {
@@ -262,6 +265,7 @@ export default function Page() {
     setProgress('Membuat row...')
 
     try {
+<<<<<<< HEAD
       // 1) create row dulu
       const createRes = await postToGAS({ type: 'pemeliharaan_create', ...form })
       if (createRes?.status !== 'success' || !createRes?.row) {
@@ -285,12 +289,31 @@ export default function Page() {
         if (upRes?.status !== 'success') {
           throw new Error(upRes?.message || `Gagal upload ${t.slot}`)
         }
+=======
+      const payload = {
+        type: 'pemeliharaan',
+        ...form,
+        fotoSebelum: await Promise.all((fotoSebelum || []).slice(0, 2).map(fileToBase64)),
+        fotoProses: await Promise.all((fotoProses || []).slice(0, 1).map(fileToBase64)),
+        fotoSesudah: await Promise.all((fotoSesudah || []).slice(0, 2).map(fileToBase64)),
+>>>>>>> 97d8d466e1e4d2410e6fc725e89bef09a4963156
       }
 
       setProgress('')
       alert('BERHASIL! Row masuk + foto masuk Drive + link muncul di kolom S-W.')
 
+<<<<<<< HEAD
       // reset
+=======
+      const json = await res.json().catch(() => null)
+      if (!res.ok || json?.status !== 'success') {
+        alert(`Gagal: ${json?.message || 'Unknown error'}`)
+        return
+      }
+
+      alert('Berhasil dikirim')
+
+>>>>>>> 97d8d466e1e4d2410e6fc725e89bef09a4963156
       setForm(p => ({
         ...p,
         ulp: '',
@@ -320,6 +343,39 @@ export default function Page() {
     }
   }
 
+<<<<<<< HEAD
+=======
+  useEffect(() => {
+    fetch(API_URL)
+      .then(r => r.json())
+      .then(res => {
+        setAsetRows(Array.isArray(res) ? res : [])
+      })
+      .catch(() => setAsetRows([]))
+  }, [])
+
+  useEffect(() => {
+    if (!form.ulp || !form.penyulang || !form.zonaProteksi || !form.section) {
+      setForm(p => ({ ...p, panjangKms: '' }))
+      return
+    }
+
+    const row = asetRows.find(
+      r =>
+        String(r.ulp).trim() === form.ulp.trim() &&
+        String(r.penyulang).trim() === form.penyulang.trim() &&
+        String(r.zona).trim() === form.zonaProteksi.trim() &&
+        String(r.section).trim() === form.section.trim()
+    )
+
+    if (row?.kms !== undefined && row?.kms !== null) {
+      setForm(p => ({ ...p, panjangKms: String(row.kms) }))
+    } else {
+      setForm(p => ({ ...p, panjangKms: '' }))
+    }
+  }, [form.ulp, form.penyulang, form.zonaProteksi, form.section, asetRows])
+
+>>>>>>> 97d8d466e1e4d2410e6fc725e89bef09a4963156
   return (
     <div className="h-screen overflow-hidden font-poppins flex flex-col">
       <div className="fixed inset-0 -z-10">
@@ -340,12 +396,15 @@ export default function Page() {
       <main className="flex-1 flex justify-center items-start px-0 pt-4 md:p-4 overflow-hidden">
         <div className="bg-white shadow-xl w-full flex flex-col h-full overflow-hidden rounded-t-[28px] rounded-b-none px-5 py-6 md:h-[82vh] md:rounded-3xl md:p-10 md:max-w-[1200px]">
           <div className="flex-1 overflow-y-auto pr-4">
+<<<<<<< HEAD
             {!!progress && (
               <div className="mb-4 text-sm text-blue-700 bg-blue-50 border border-blue-100 rounded-lg px-4 py-2">
                 {progress}
               </div>
             )}
 
+=======
+>>>>>>> 97d8d466e1e4d2410e6fc725e89bef09a4963156
             <div className="w-full grid grid-cols-1 md:grid-cols-2 gap-x-10 gap-y-6">
               <div className="flex flex-col gap-6">
                 <Input label="UP3" value={form.up3} readOnly />
@@ -440,6 +499,21 @@ export default function Page() {
                 <NumberStepper label="Nilai Tahanan Isolasi Sesudah" value={form.NilaiTahananIsolasiSesudah} onChange={v => handleChange('NilaiTahananIsolasiSesudah', v)} />
                 <NumberStepper label="Nilai Pentanahan Setelah Perbaikan" value={form.nilaiPertanahan} onChange={v => handleChange('nilaiPertanahan', v)} />
 
+<<<<<<< HEAD
+=======
+                <NumberStepper
+                  label="Nilai Tahanan Isolasi Sesudah"
+                  value={form.NilaiTahananIsolasiSesudah}
+                  onChange={v => handleChange('NilaiTahananIsolasiSesudah', v)}
+                />
+
+                <NumberStepper
+                  label="Nilai Pentanahan Setelah Perbaikan"
+                  value={form.nilaiPertanahan}
+                  onChange={v => handleChange('nilaiPertanahan', v)}
+                />
+
+>>>>>>> 97d8d466e1e4d2410e6fc725e89bef09a4963156
                 <Input label="Keterangan" value={form.keterangan} onChange={e => handleChange('keterangan', e.target.value)} />
               </div>
             </div>
@@ -541,11 +615,7 @@ function NumberStepper({ label, value, onChange }: NumberStepperProps) {
           −
         </button>
 
-        <button
-          type="button"
-          onClick={() => onChange(String(num + 1))}
-          className="w-12 h-12 border rounded-full text-xl"
-        >
+        <button type="button" onClick={() => onChange(String(num + 1))} className="w-12 h-12 border rounded-full text-xl">
           +
         </button>
       </div>
@@ -611,10 +681,15 @@ function MultiUploadPreview({ label, files, setFiles }: MultiUploadPreviewProps)
       </div>
 
       {open !== null && previews[open] && (
+<<<<<<< HEAD
         <div
           onClick={() => setOpen(null)}
           className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center"
         >
+=======
+        <div onClick={() => setOpen(null)} className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+>>>>>>> 97d8d466e1e4d2410e6fc725e89bef09a4963156
           <img src={previews[open]} className="max-w-[90vw] max-h-[90vh] rounded-xl" alt="preview-large" />
         </div>
       )}
@@ -632,15 +707,7 @@ type PopupSelectProps = {
   searchable?: boolean
 }
 
-function PopupSelect({
-  label,
-  value,
-  options,
-  onSave,
-  onClear,
-  disabled = false,
-  searchable = false,
-}: PopupSelectProps) {
+function PopupSelect({ label, value, options, onSave, onClear, disabled = false, searchable = false }: PopupSelectProps) {
   const [open, setOpen] = useState(false)
   const [search, setSearch] = useState('')
 
@@ -651,10 +718,7 @@ function PopupSelect({
 
   return (
     <>
-      <div
-        onClick={() => !disabled && setOpen(true)}
-        className={`cursor-pointer ${disabled ? 'opacity-50 pointer-events-none' : ''}`}
-      >
+      <div onClick={() => !disabled && setOpen(true)} className={`cursor-pointer ${disabled ? 'opacity-50 pointer-events-none' : ''}`}>
         <label className="text-sm font-semibold">
           {label} <span className="text-red-500">*</span>
         </label>
@@ -669,14 +733,8 @@ function PopupSelect({
       </div>
 
       {open && (
-        <div
-          onClick={() => setOpen(false)}
-          className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center"
-        >
-          <div
-            onClick={e => e.stopPropagation()}
-            className="bg-white p-6 rounded-xl w-[700px] max-h-[75vh] flex flex-col"
-          >
+        <div onClick={() => setOpen(false)} className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center">
+          <div onClick={e => e.stopPropagation()} className="bg-white p-6 rounded-xl w-[700px] max-h-[75vh] flex flex-col">
             <h2 className="font-bold mb-3">{label}</h2>
 
             {searchable && (
@@ -699,9 +757,7 @@ function PopupSelect({
                       setOpen(false)
                       setSearch('')
                     }}
-                    className={`py-2 px-3 rounded-lg cursor-pointer ${
-                      selected ? 'bg-[#E8F5FB] text-blue-600 font-semibold' : 'hover:bg-gray-100'
-                    }`}
+                    className={`py-2 px-3 rounded-lg cursor-pointer ${selected ? 'bg-[#E8F5FB] text-blue-600 font-semibold' : 'hover:bg-gray-100'}`}
                   >
                     {o}
                   </div>

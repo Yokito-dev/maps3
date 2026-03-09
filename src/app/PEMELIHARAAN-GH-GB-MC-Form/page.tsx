@@ -52,35 +52,35 @@ export default function Page() {
     () => Array.from(new Set(sheetData.map(d => d.ulp))),
     [sheetData]
   )
- const ALASAN_DATA = [
-  'ADANYA FLASHOVER/KORONA/SUARA MENDESIS',
-  'PERUBAHAN DARI OPEN CELL KE KUBIKEL',
-  'POSISI PERALATAN DAN TRAFO TANPA SEKAT',
-  'TIDAK ADANYA DUDUKAN KUBIKEL',
-  'KONDISI RUANGAN LEMBAB',
-]
+  const ALASAN_DATA = [
+    'ADANYA FLASHOVER/KORONA/SUARA MENDESIS',
+    'PERUBAHAN DARI OPEN CELL KE KUBIKEL',
+    'POSISI PERALATAN DAN TRAFO TANPA SEKAT',
+    'TIDAK ADANYA DUDUKAN KUBIKEL',
+    'KONDISI RUANGAN LEMBAB',
+  ]
 
-const PEMELIHARAAN_DATA = [
-  'Pemasangan/Pembongkaran Kubikel air insulated motorized, Incomming CB 20 kV',
-  'Pemasangan/Pembongkaran Kubikel air insulated motorized, Outgoing (CB) 20 kV',
-  'Pemasangan/Pembongkaran terminasi / end Mof Indoor three core',
-  'Pemasangan/Pembongkaran elastimol 20 kV',
-  'Membersihkan peralatan kubikel & catu daya (Offline)',
-  'Penggantian kabel dan accesories',
-  'Pemasangan dan setting relay',
-  'Pemasangan dudukan kubikel',
-  'Perbaikan Pentanahan',
-  'Perbaikan pintu gardu',
-  'Pembersihan halaman gardu',
-  'Pengecatan gardu MC',
-  'Aktivasi relay dan heater kubikel',
-]
+  const PEMELIHARAAN_DATA = [
+    'Pemasangan/Pembongkaran Kubikel air insulated motorized, Incomming CB 20 kV',
+    'Pemasangan/Pembongkaran Kubikel air insulated motorized, Outgoing (CB) 20 kV',
+    'Pemasangan/Pembongkaran terminasi / end Mof Indoor three core',
+    'Pemasangan/Pembongkaran elastimol 20 kV',
+    'Membersihkan peralatan kubikel & catu daya (Offline)',
+    'Penggantian kabel dan accesories',
+    'Pemasangan dan setting relay',
+    'Pemasangan dudukan kubikel',
+    'Perbaikan Pentanahan',
+    'Perbaikan pintu gardu',
+    'Pembersihan halaman gardu',
+    'Pengecatan gardu MC',
+    'Aktivasi relay dan heater kubikel',
+  ]
 
-const KOMPONEN_DATA = [
-  'CLOSED CELL / KUBIKEL',
-  'PMCB',
-  'OPEN CELL',
-]
+  const KOMPONEN_DATA = [
+    'CLOSED CELL / KUBIKEL',
+    'PMCB',
+    'OPEN CELL',
+  ]
 
 
 
@@ -307,13 +307,45 @@ type NumberStepperProps = {
 
 function NumberStepper({ label, value, onChange }: NumberStepperProps) {
   const num = Number(value || 0)
+
   return (
     <div>
-      <label className="text-sm font-semibold">{label} <span className="text-red-500">*</span></label>
+      <label className="text-sm font-semibold">
+        {label} <span className="text-red-500">*</span>
+      </label>
+
       <div className="flex items-center gap-3 mt-2">
-        <input readOnly value={num} className="flex-1 py-3 px-5 border-2 border-[#2FA6DE] rounded-full" />
-        <button onClick={() => onChange(String(Math.max(0, num - 1)))} className="w-12 h-12 border rounded-full text-xl">−</button>
-        <button onClick={() => onChange(String(num + 1))} className="w-12 h-12 border rounded-full text-xl">+</button>
+
+        <input
+          type="number"
+          value={value}
+          onChange={(e) => {
+            const val = e.target.value
+
+            // hanya izinkan angka & kosong
+            if (/^\d*$/.test(val)) {
+              onChange(val)
+            }
+          }}
+          className="flex-1 py-3 px-5 border-2 border-[#2FA6DE] rounded-full outline-none"
+        />
+
+        <button
+          type="button"
+          onClick={() => onChange(String(Math.max(0, num - 1)))}
+          className="w-12 h-12 border rounded-full text-xl"
+        >
+          −
+        </button>
+
+        <button
+          type="button"
+          onClick={() => onChange(String(num + 1))}
+          className="w-12 h-12 border rounded-full text-xl"
+        >
+          +
+        </button>
+
       </div>
     </div>
   )
