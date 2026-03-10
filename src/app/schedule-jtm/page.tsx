@@ -343,7 +343,7 @@ export default function ScheduleClient({ initialData }: Props) {
                                 className="px-2 py-1 h-[14px] md:h-auto rounded mb-1 cursor-pointer hover:opacity-80"
                                 style={{ backgroundColor: e.color }}
                               >
-                                <span className="hidden md:block text-[11px]">
+                                <span className="hidden md:block text-[11px] md:truncate lg:whitespace-normal">
                                   {e.ulp}
                                 </span>
                               </div>
