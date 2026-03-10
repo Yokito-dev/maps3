@@ -89,9 +89,6 @@ const MENGAPAJTMDIPELIHARA_LIST: string[] = [
   'Pengikat isolator rusak / tidak sesuai',
 ]
 
-/* ================= HELPERS ================= */
-
-// kompres keras biar aman
 const fileToBase64 = (file: File) =>
   new Promise<{ name: string; type: string; data: string }>((resolve, reject) => {
     const img = new window.Image()
@@ -148,14 +145,14 @@ async function postToGAS(payload: any) {
     headers: { 'Content-Type': 'text/plain;charset=utf-8' },
     body: JSON.stringify(payload),
   })
+
   const data = await r.json().catch(async () => {
     const t = await r.text()
     return { status: 'error', message: t }
   })
+
   return data
 }
-
-/* ================= PAGE ================= */
 
 export default function Page() {
   const router = useRouter()
@@ -230,127 +227,12 @@ export default function Page() {
     )
   }, [asetRows, form.zonaProteksi])
 
-<<<<<<< HEAD
-  // foto boleh kosong
-=======
->>>>>>> 97d8d466e1e4d2410e6fc725e89bef09a4963156
   const isFormValid = Object.values(form).every(v => String(v).trim() !== '')
 
   useEffect(() => {
     fetch(API_URL)
       .then(r => r.json())
       .then(res => setAsetRows(Array.isArray(res) ? res : []))
-      .catch(() => setAsetRows([]))
-  }, [])
-
-  useEffect(() => {
-    if (!form.ulp || !form.penyulang || !form.zonaProteksi || !form.section) {
-      setForm(p => ({ ...p, panjangKms: '' }))
-      return
-    }
-
-    const row = asetRows.find(r =>
-      String(r.ulp).trim() === form.ulp.trim() &&
-      String(r.penyulang).trim() === form.penyulang.trim() &&
-      String(r.zona).trim() === form.zonaProteksi.trim() &&
-      String(r.section).trim() === form.section.trim()
-    )
-
-    setForm(p => ({ ...p, panjangKms: row?.kms != null ? String(row.kms) : '' }))
-  }, [form.ulp, form.penyulang, form.zonaProteksi, form.section, asetRows])
-
-  const handleSubmit = async () => {
-    if (!isFormValid || submitting) return
-    setSubmitting(true)
-    setProgress('Membuat row...')
-
-    try {
-<<<<<<< HEAD
-      // 1) create row dulu
-      const createRes = await postToGAS({ type: 'pemeliharaan_create', ...form })
-      if (createRes?.status !== 'success' || !createRes?.row) {
-        throw new Error(createRes?.message || 'Gagal create row')
-      }
-      const row = Number(createRes.row)
-
-      // 2) upload foto satu-satu
-      const tasks: Array<{ slot: string; file: File }> = []
-      if (fotoSebelum[0]) tasks.push({ slot: 'sebelum1', file: fotoSebelum[0] })
-      if (fotoSebelum[1]) tasks.push({ slot: 'sebelum2', file: fotoSebelum[1] })
-      if (fotoProses[0]) tasks.push({ slot: 'proses', file: fotoProses[0] })
-      if (fotoSesudah[0]) tasks.push({ slot: 'sesudah1', file: fotoSesudah[0] })
-      if (fotoSesudah[1]) tasks.push({ slot: 'sesudah2', file: fotoSesudah[1] })
-
-      for (let i = 0; i < tasks.length; i++) {
-        const t = tasks[i]
-        setProgress(`Upload foto ${i + 1}/${tasks.length} (${t.slot})...`)
-        const b64 = await fileToBase64(t.file)
-        const upRes = await postToGAS({ type: 'pemeliharaan_upload', row, slot: t.slot, file: b64 })
-        if (upRes?.status !== 'success') {
-          throw new Error(upRes?.message || `Gagal upload ${t.slot}`)
-        }
-=======
-      const payload = {
-        type: 'pemeliharaan',
-        ...form,
-        fotoSebelum: await Promise.all((fotoSebelum || []).slice(0, 2).map(fileToBase64)),
-        fotoProses: await Promise.all((fotoProses || []).slice(0, 1).map(fileToBase64)),
-        fotoSesudah: await Promise.all((fotoSesudah || []).slice(0, 2).map(fileToBase64)),
->>>>>>> 97d8d466e1e4d2410e6fc725e89bef09a4963156
-      }
-
-      setProgress('')
-      alert('BERHASIL! Row masuk + foto masuk Drive + link muncul di kolom S-W.')
-
-<<<<<<< HEAD
-      // reset
-=======
-      const json = await res.json().catch(() => null)
-      if (!res.ok || json?.status !== 'success') {
-        alert(`Gagal: ${json?.message || 'Unknown error'}`)
-        return
-      }
-
-      alert('Berhasil dikirim')
-
->>>>>>> 97d8d466e1e4d2410e6fc725e89bef09a4963156
-      setForm(p => ({
-        ...p,
-        ulp: '',
-        penyulang: '',
-        zonaProteksi: '',
-        section: '',
-        panjangKms: '0',
-        alasan: '',
-        pemeliharaan: '',
-        tanggalPemeliharaan: '',
-        dieksekusiOleh: '',
-        jumlahItemMaterial: '0',
-        NilaiTahananIsolasiSesudah: '0',
-        nilaiPertanahan: '0',
-        keterangan: '',
-        koordinat: '',
-      }))
-      setFotoSebelum([])
-      setFotoProses([])
-      setFotoSesudah([])
-      setShowMap(false)
-    } catch (e: any) {
-      setProgress('')
-      alert(`Gagal: ${e?.message || String(e)}\nCek log: ${API_URL}?type=logs`)
-    } finally {
-      setSubmitting(false)
-    }
-  }
-
-<<<<<<< HEAD
-=======
-  useEffect(() => {
-    fetch(API_URL)
-      .then(r => r.json())
-      .then(res => {
-        setAsetRows(Array.isArray(res) ? res : [])
-      })
       .catch(() => setAsetRows([]))
   }, [])
 
@@ -368,14 +250,80 @@ export default function Page() {
         String(r.section).trim() === form.section.trim()
     )
 
-    if (row?.kms !== undefined && row?.kms !== null) {
-      setForm(p => ({ ...p, panjangKms: String(row.kms) }))
-    } else {
-      setForm(p => ({ ...p, panjangKms: '' }))
-    }
+    setForm(p => ({ ...p, panjangKms: row?.kms != null ? String(row.kms) : '' }))
   }, [form.ulp, form.penyulang, form.zonaProteksi, form.section, asetRows])
 
->>>>>>> 97d8d466e1e4d2410e6fc725e89bef09a4963156
+  const handleSubmit = async () => {
+    if (!isFormValid || submitting) return
+
+    setSubmitting(true)
+    setProgress('Membuat row...')
+
+    try {
+      const createRes = await postToGAS({ type: 'pemeliharaan_create', ...form })
+
+      if (createRes?.status !== 'success' || !createRes?.row) {
+        throw new Error(createRes?.message || 'Gagal create row')
+      }
+
+      const row = Number(createRes.row)
+
+      const tasks: Array<{ slot: string; file: File }> = []
+      if (fotoSebelum[0]) tasks.push({ slot: 'sebelum1', file: fotoSebelum[0] })
+      if (fotoSebelum[1]) tasks.push({ slot: 'sebelum2', file: fotoSebelum[1] })
+      if (fotoProses[0]) tasks.push({ slot: 'proses', file: fotoProses[0] })
+      if (fotoSesudah[0]) tasks.push({ slot: 'sesudah1', file: fotoSesudah[0] })
+      if (fotoSesudah[1]) tasks.push({ slot: 'sesudah2', file: fotoSesudah[1] })
+
+      for (let i = 0; i < tasks.length; i++) {
+        const t = tasks[i]
+        setProgress(`Upload foto ${i + 1}/${tasks.length} (${t.slot})...`)
+        const b64 = await fileToBase64(t.file)
+        const upRes = await postToGAS({
+          type: 'pemeliharaan_upload',
+          row,
+          slot: t.slot,
+          file: b64,
+        })
+
+        if (upRes?.status !== 'success') {
+          throw new Error(upRes?.message || `Gagal upload ${t.slot}`)
+        }
+      }
+
+      setProgress('')
+      alert('BERHASIL! Row masuk + foto masuk Drive + link muncul di kolom S-W.')
+
+      setForm(p => ({
+        ...p,
+        ulp: '',
+        penyulang: '',
+        zonaProteksi: '',
+        section: '',
+        panjangKms: '0',
+        alasan: '',
+        pemeliharaan: '',
+        tanggalPemeliharaan: '',
+        dieksekusiOleh: '',
+        jumlahItemMaterial: '0',
+        NilaiTahananIsolasiSesudah: '0',
+        nilaiPertanahan: '0',
+        keterangan: '',
+        koordinat: '',
+      }))
+
+      setFotoSebelum([])
+      setFotoProses([])
+      setFotoSesudah([])
+      setShowMap(false)
+    } catch (e: any) {
+      setProgress('')
+      alert(`Gagal: ${e?.message || String(e)}\nCek log: ${API_URL}?type=logs`)
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
   return (
     <div className="h-screen overflow-hidden font-poppins flex flex-col">
       <div className="fixed inset-0 -z-10">
@@ -396,15 +344,12 @@ export default function Page() {
       <main className="flex-1 flex justify-center items-start px-0 pt-4 md:p-4 overflow-hidden">
         <div className="bg-white shadow-xl w-full flex flex-col h-full overflow-hidden rounded-t-[28px] rounded-b-none px-5 py-6 md:h-[82vh] md:rounded-3xl md:p-10 md:max-w-[1200px]">
           <div className="flex-1 overflow-y-auto pr-4">
-<<<<<<< HEAD
             {!!progress && (
               <div className="mb-4 text-sm text-blue-700 bg-blue-50 border border-blue-100 rounded-lg px-4 py-2">
                 {progress}
               </div>
             )}
 
-=======
->>>>>>> 97d8d466e1e4d2410e6fc725e89bef09a4963156
             <div className="w-full grid grid-cols-1 md:grid-cols-2 gap-x-10 gap-y-6">
               <div className="flex flex-col gap-6">
                 <Input label="UP3" value={form.up3} readOnly />
@@ -457,7 +402,11 @@ export default function Page() {
                   onClear={() => handleChange('section', '')}
                 />
 
-                <NumberStepper label="Panjang Km/s" value={form.panjangKms} onChange={v => handleChange('panjangKms', v)} />
+                <NumberStepper
+                  label="Panjang Km/s"
+                  value={form.panjangKms}
+                  onChange={v => handleChange('panjangKms', v)}
+                />
 
                 <PopupSelect
                   label="Mengapa JTM dipelihara?"
@@ -495,12 +444,12 @@ export default function Page() {
                   onClear={() => handleChange('dieksekusiOleh', '')}
                 />
 
-                <NumberStepper label="Jumlah item material" value={form.jumlahItemMaterial} onChange={v => handleChange('jumlahItemMaterial', v)} />
-                <NumberStepper label="Nilai Tahanan Isolasi Sesudah" value={form.NilaiTahananIsolasiSesudah} onChange={v => handleChange('NilaiTahananIsolasiSesudah', v)} />
-                <NumberStepper label="Nilai Pentanahan Setelah Perbaikan" value={form.nilaiPertanahan} onChange={v => handleChange('nilaiPertanahan', v)} />
+                <NumberStepper
+                  label="Jumlah item material"
+                  value={form.jumlahItemMaterial}
+                  onChange={v => handleChange('jumlahItemMaterial', v)}
+                />
 
-<<<<<<< HEAD
-=======
                 <NumberStepper
                   label="Nilai Tahanan Isolasi Sesudah"
                   value={form.NilaiTahananIsolasiSesudah}
@@ -513,8 +462,11 @@ export default function Page() {
                   onChange={v => handleChange('nilaiPertanahan', v)}
                 />
 
->>>>>>> 97d8d466e1e4d2410e6fc725e89bef09a4963156
-                <Input label="Keterangan" value={form.keterangan} onChange={e => handleChange('keterangan', e.target.value)} />
+                <Input
+                  label="Keterangan"
+                  value={form.keterangan}
+                  onChange={e => handleChange('keterangan', e.target.value)}
+                />
               </div>
             </div>
 
@@ -541,18 +493,36 @@ export default function Page() {
               </div>
 
               {showMap && (
-                <div className="mt-4 w-full rounded-xl border border-slate-300 bg-white" style={{ height: 380 }}>
+                <div
+                  className="mt-4 w-full rounded-xl border border-slate-300 bg-white"
+                  style={{ height: 380 }}
+                >
                   <div className="w-full h-full">
-                    <MapPicker koordinat={form.koordinat} onChange={(v: string) => handleChange('koordinat', v)} />
+                    <MapPicker
+                      koordinat={form.koordinat}
+                      onChange={(v: string) => handleChange('koordinat', v)}
+                    />
                   </div>
                 </div>
               )}
             </div>
 
             <div className="mt-10 grid grid-cols-1 md:grid-cols-3 gap-8">
-              <MultiUploadPreview label="Foto Sebelum (maks 2)" files={fotoSebelum} setFiles={setFotoSebelum} />
-              <MultiUploadPreview label="Foto Proses (maks 1)" files={fotoProses} setFiles={setFotoProses} />
-              <MultiUploadPreview label="Foto Sesudah (maks 2)" files={fotoSesudah} setFiles={setFotoSesudah} />
+              <MultiUploadPreview
+                label="Foto Sebelum (maks 2)"
+                files={fotoSebelum}
+                setFiles={setFotoSebelum}
+              />
+              <MultiUploadPreview
+                label="Foto Proses (maks 1)"
+                files={fotoProses}
+                setFiles={setFotoProses}
+              />
+              <MultiUploadPreview
+                label="Foto Sesudah (maks 2)"
+                files={fotoSesudah}
+                setFiles={setFotoSesudah}
+              />
             </div>
 
             <div className="flex gap-4 mt-12 justify-center">
@@ -569,7 +539,9 @@ export default function Page() {
                 onClick={handleSubmit}
                 disabled={!isFormValid || submitting}
                 className={`px-12 py-3 rounded-full text-white ${
-                  isFormValid && !submitting ? 'bg-[#2FA6DE]' : 'bg-gray-400 cursor-not-allowed'
+                  isFormValid && !submitting
+                    ? 'bg-[#2FA6DE]'
+                    : 'bg-gray-400 cursor-not-allowed'
                 }`}
               >
                 {submitting ? 'Submitting...' : 'Submit'}
@@ -581,8 +553,6 @@ export default function Page() {
     </div>
   )
 }
-
-/* ================= COMPONENTS ================= */
 
 type NumberStepperProps = {
   label: string
@@ -615,7 +585,11 @@ function NumberStepper({ label, value, onChange }: NumberStepperProps) {
           −
         </button>
 
-        <button type="button" onClick={() => onChange(String(num + 1))} className="w-12 h-12 border rounded-full text-xl">
+        <button
+          type="button"
+          onClick={() => onChange(String(num + 1))}
+          className="w-12 h-12 border rounded-full text-xl"
+        >
           +
         </button>
       </div>
@@ -681,16 +655,15 @@ function MultiUploadPreview({ label, files, setFiles }: MultiUploadPreviewProps)
       </div>
 
       {open !== null && previews[open] && (
-<<<<<<< HEAD
         <div
           onClick={() => setOpen(null)}
           className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center"
         >
-=======
-        <div onClick={() => setOpen(null)} className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
->>>>>>> 97d8d466e1e4d2410e6fc725e89bef09a4963156
-          <img src={previews[open]} className="max-w-[90vw] max-h-[90vh] rounded-xl" alt="preview-large" />
+          <img
+            src={previews[open]}
+            className="max-w-[90vw] max-h-[90vh] rounded-xl"
+            alt="preview-large"
+          />
         </div>
       )}
     </>
@@ -707,7 +680,15 @@ type PopupSelectProps = {
   searchable?: boolean
 }
 
-function PopupSelect({ label, value, options, onSave, onClear, disabled = false, searchable = false }: PopupSelectProps) {
+function PopupSelect({
+  label,
+  value,
+  options,
+  onSave,
+  onClear,
+  disabled = false,
+  searchable = false,
+}: PopupSelectProps) {
   const [open, setOpen] = useState(false)
   const [search, setSearch] = useState('')
 
@@ -718,7 +699,10 @@ function PopupSelect({ label, value, options, onSave, onClear, disabled = false,
 
   return (
     <>
-      <div onClick={() => !disabled && setOpen(true)} className={`cursor-pointer ${disabled ? 'opacity-50 pointer-events-none' : ''}`}>
+      <div
+        onClick={() => !disabled && setOpen(true)}
+        className={`cursor-pointer ${disabled ? 'opacity-50 pointer-events-none' : ''}`}
+      >
         <label className="text-sm font-semibold">
           {label} <span className="text-red-500">*</span>
         </label>
@@ -733,8 +717,14 @@ function PopupSelect({ label, value, options, onSave, onClear, disabled = false,
       </div>
 
       {open && (
-        <div onClick={() => setOpen(false)} className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center">
-          <div onClick={e => e.stopPropagation()} className="bg-white p-6 rounded-xl w-[700px] max-h-[75vh] flex flex-col">
+        <div
+          onClick={() => setOpen(false)}
+          className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center"
+        >
+          <div
+            onClick={e => e.stopPropagation()}
+            className="bg-white p-6 rounded-xl w-[700px] max-h-[75vh] flex flex-col"
+          >
             <h2 className="font-bold mb-3">{label}</h2>
 
             {searchable && (
@@ -757,7 +747,11 @@ function PopupSelect({ label, value, options, onSave, onClear, disabled = false,
                       setOpen(false)
                       setSearch('')
                     }}
-                    className={`py-2 px-3 rounded-lg cursor-pointer ${selected ? 'bg-[#E8F5FB] text-blue-600 font-semibold' : 'hover:bg-gray-100'}`}
+                    className={`py-2 px-3 rounded-lg cursor-pointer ${
+                      selected
+                        ? 'bg-[#E8F5FB] text-blue-600 font-semibold'
+                        : 'hover:bg-gray-100'
+                    }`}
                   >
                     {o}
                   </div>
