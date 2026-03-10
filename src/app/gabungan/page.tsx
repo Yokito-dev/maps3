@@ -13,18 +13,21 @@ const Tooltip = dynamic(() => import("react-leaflet").then((m) => m.Tooltip), { 
 const Polyline = dynamic(() => import("react-leaflet").then((m) => m.Polyline), { ssr: false });
 const Marker = dynamic(() => import("react-leaflet").then((m) => m.Marker), { ssr: false });
 
-/** Tiang by ULP */
+/**
+ * Apps Script URL
+ * pakai 1 endpoint yang handle:
+ * - ulplist
+ * - bundle lite
+ * - network
+ */
 const BUNDLE_URL =
   "https://script.google.com/macros/s/AKfycbz7DPwE1bcVqtEPjh4vxKkjKdG-nipMyw7wMbpBRt29DtBhEOzu3nlAc22zg9mudJ8ojA/exec";
-
-/** LBS/REC global */
-const GAS_URL =
-  "https://script.google.com/macros/s/AKfycbwchchEzqRbtHKzCZh7nL0QnhPKUWN3aI3DvV9Hp8SbkCESLnaRBGeFdRUQzGe7eetO/exec";
 
 const UP3 = "MAKASSAR SELATAN";
 const DEDUP_DECIMALS = 6;
 
 type LatLng = [number, number];
+type NodeKategori = "GI" | "GH" | "LBS" | "REC";
 
 type PolePointRaw = {
   rowId: number;
@@ -35,30 +38,88 @@ type PolePointRaw = {
   owner: string;
   latitude: number;
   longitude: number;
-  attach?: {
-    LBS?: Array<{ keypoint: string; ulp: string; status: string; srcLat: number; srcLng: number; matchedDistMeters?: number }>;
-    REC?: Array<{ keypoint: string; ulp: string; status: string; srcLat: number; srcLng: number; matchedDistMeters?: number }>;
-  };
 };
 
-type CatItem = { keypoint: string; ulp: string; status: string };
-type CatPoint = {
-  kategori: string;
+type NetNodeRaw = {
+  rowId: number;
+  kategori: NodeKategori;
+  keypoint: string;
+  ulp: string;
   up3: string;
+  status: string;
   latitude: number;
   longitude: number;
-  count: number;
-  items: CatItem[];
 };
 
-type AttachItem = {
-  kategori: "LBS" | "REC";
-  keypoint: string;
-  status: string;
+type SectionLinkRaw = {
+  id: string;
+  rowId: number;
   ulp: string;
-  srcLat: number;
-  srcLng: number;
-  distMeters?: number;
+  up3: string;
+  section: string;
+
+  fromName: string;
+  fromKategori: NodeKategori;
+  fromLat: number;
+  fromLng: number;
+
+  toName: string;
+  toKategori: NodeKategori;
+  toLat: number;
+  toLng: number;
+};
+
+type CatItem = {
+  keypoint: string;
+  ulp: string;
+  status: string;
+  kategori: NodeKategori;
+};
+
+type SectionMarker = {
+  key: string;
+  latitude: number;
+  longitude: number;
+  giItems: CatItem[];
+  ghItems: CatItem[];
+  lbsItems: CatItem[];
+  recItems: CatItem[];
+};
+
+type DraftPoint = {
+  lat: number;
+  lng: number;
+  kind: NodeKategori;
+};
+
+type RouteMode = "poles" | "road" | "straight";
+
+type SavedLine = {
+  id: string;
+  name: string;
+  color: string;
+  points: DraftPoint[];
+  path: LatLng[];
+  visible: boolean;
+  routeMode: RouteMode;
+  profile: "driving";
+  snapToPoleMaxMeters: number;
+  poleEdgeCutoffMeters: number;
+  poleKNearest: number;
+  createdAt: number;
+  ulpAtCreate?: string;
+};
+
+type PathBBox = {
+  minLat: number;
+  minLng: number;
+  maxLat: number;
+  maxLng: number;
+};
+
+type AutoSectionLine = SectionLinkRaw & {
+  path: LatLng[];
+  bbox: PathBBox;
 };
 
 type PoleGroup = {
@@ -69,23 +130,15 @@ type PoleGroup = {
   rowIds: number[];
   owners: string[];
   address: string;
-  attach: { LBS: AttachItem[]; REC: AttachItem[] };
-};
-
-type SectionMarker = {
-  key: string;
-  latitude: number;
-  longitude: number;
-  lbsItems: CatItem[];
-  recItems: CatItem[];
 };
 
 type SelectedPoint =
   | { kind: "pole"; data: PoleGroup }
   | { kind: "section"; data: SectionMarker };
 
-// ===== JSONP (callback fixed "cb") + queue =====
+// ===== JSONP queue =====
 let __jsonpMutex: Promise<any> = Promise.resolve();
+
 function jsonp<T>(url: string, params: Record<string, string>, timeoutMs = 60000): Promise<T> {
   const runOnce = () =>
     new Promise<T>((resolve, reject) => {
@@ -108,7 +161,12 @@ function jsonp<T>(url: string, params: Record<string, string>, timeoutMs = 60000
         if (script.parentNode) script.parentNode.removeChild(script);
       }
 
-      const qp = new URLSearchParams({ ...params, callback: cbName, _ts: String(Date.now()) }).toString();
+      const qp = new URLSearchParams({
+        ...params,
+        callback: cbName,
+        _ts: String(Date.now()),
+      }).toString();
+
       script.src = `${url}${url.includes("?") ? "&" : "?"}${qp}`;
       script.onerror = () => {
         cleanup();
@@ -132,11 +190,42 @@ function MapSetter({ onReady }: { onReady: (m: LeafletMap) => void }) {
 function coordKey(lat: number, lng: number) {
   return `${lat.toFixed(DEDUP_DECIMALS)},${lng.toFixed(DEDUP_DECIMALS)}`;
 }
+
 function coordKey6(lat: number, lng: number) {
   return `${lat.toFixed(6)},${lng.toFixed(6)}`;
 }
+
 function fmtCoord(lat: number, lng: number) {
   return `${lat.toFixed(6)}, ${lng.toFixed(6)}`;
+}
+
+function calcPathBBox(path: LatLng[]): PathBBox {
+  let minLat = Infinity;
+  let minLng = Infinity;
+  let maxLat = -Infinity;
+  let maxLng = -Infinity;
+
+  for (const [lat, lng] of path) {
+    if (lat < minLat) minLat = lat;
+    if (lng < minLng) minLng = lng;
+    if (lat > maxLat) maxLat = lat;
+    if (lng > maxLng) maxLng = lng;
+  }
+
+  return { minLat, minLng, maxLat, maxLng };
+}
+
+function bboxIntersectsBounds(bbox: PathBBox, bounds: any) {
+  if (!bounds) return true;
+  const sw = bounds.getSouthWest();
+  const ne = bounds.getNorthEast();
+
+  return !(
+    bbox.maxLat < sw.lat ||
+    bbox.minLat > ne.lat ||
+    bbox.maxLng < sw.lng ||
+    bbox.minLng > ne.lng
+  );
 }
 
 function haversineMeters(a: { lat: number; lng: number }, b: { lat: number; lng: number }) {
@@ -150,12 +239,14 @@ function haversineMeters(a: { lat: number; lng: number }, b: { lat: number; lng:
   return 2 * R * Math.asin(Math.sqrt(h));
 }
 
-// ===== fixed colors per type =====
+// ===== fixed colors =====
 const COLOR_TIANG = { stroke: "#1565c0", fill: "#1e88e5" };
+const COLOR_GI = { stroke: "#ef6c00", fill: "#fb8c00" };
+const COLOR_GH = { stroke: "#6a1b9a", fill: "#8e24aa" };
 const COLOR_LBS = { stroke: "#ad1457", fill: "#e91e63" };
 const COLOR_REC = { stroke: "#2e7d32", fill: "#43a047" };
 
-// ===== ICONS (DivIcon) =====
+// ===== ICONS =====
 function makePinIcon(letter: string, color: { stroke: string; fill: string }, size = 30): DivIcon {
   const html = `
   <div style="width:${size}px;height:${size}px;display:flex;align-items:center;justify-content:center;background:transparent;border:none;filter:drop-shadow(0 1px 2px rgba(0,0,0,0.35));">
@@ -199,36 +290,6 @@ function makePoleIcon(color: { stroke: string; fill: string }, size = 24): DivIc
   });
 }
 
-// ===== MANUAL LINE EDIT =====
-type DraftPoint = { lat: number; lng: number; kind: "LBS" | "REC" };
-type RouteMode = "poles" | "road" | "straight";
-
-type SavedLine = {
-  id: string;
-  name: string;
-  color: string;
-
-  // titik klik (LBS/REC) sebagai kontrol
-  points: DraftPoint[];
-
-  // path render final
-  path: LatLng[];
-
-  visible: boolean;
-
-  // routing
-  routeMode: RouteMode;
-  profile: "driving";
-
-  // poles routing params (ngikut tiang)
-  snapToPoleMaxMeters: number;
-  poleEdgeCutoffMeters: number;
-  poleKNearest: number;
-
-  createdAt: number;
-  ulpAtCreate?: string;
-};
-
 async function fetchOsrmRoute(
   a: { lat: number; lng: number },
   b: { lat: number; lng: number },
@@ -246,7 +307,7 @@ async function fetchOsrmRoute(
     const json = await res.json();
     const coords: Array<[number, number]> | undefined = json?.routes?.[0]?.geometry?.coordinates;
     if (!Array.isArray(coords) || coords.length < 2) return null;
-    return coords.map((c) => [c[1], c[0]] as LatLng); // geojson [lon,lat]
+    return coords.map((c) => [c[1], c[0]] as LatLng);
   } catch {
     return null;
   } finally {
@@ -254,12 +315,14 @@ async function fetchOsrmRoute(
   }
 }
 
-// ===== Simple MinHeap for Dijkstra =====
+// ===== MinHeap =====
 class MinHeap<T> {
   private a: Array<{ k: number; v: T }> = [];
+
   get size() {
     return this.a.length;
   }
+
   push(k: number, v: T) {
     const a = this.a;
     a.push({ k, v });
@@ -271,9 +334,11 @@ class MinHeap<T> {
       i = p;
     }
   }
+
   pop(): { k: number; v: T } | null {
     const a = this.a;
     if (!a.length) return null;
+
     const top = a[0];
     const last = a.pop()!;
     if (a.length) {
@@ -294,7 +359,7 @@ class MinHeap<T> {
   }
 }
 
-// ===== Pole router (graph + densify) =====
+// ===== Pole Router =====
 function buildPoleRouter(poles: PoleGroup[], poleEdgeCutoffMeters: number, poleKNearest: number) {
   const n = poles.length;
   if (n < 2) return null;
@@ -306,15 +371,16 @@ function buildPoleRouter(poles: PoleGroup[], poleEdgeCutoffMeters: number, poleK
 
   const xs = new Array<number>(n);
   const ys = new Array<number>(n);
+
   for (let i = 0; i < n; i++) {
     xs[i] = poles[i].longitude * mPerDegLng;
     ys[i] = poles[i].latitude * mPerDegLat;
   }
 
-  // grid for neighbor lookup
-  const cell = Math.max(60, Math.min(250, Math.floor(poleEdgeCutoffMeters))); // meters
+  const cell = Math.max(60, Math.min(250, Math.floor(poleEdgeCutoffMeters)));
   const key = (cx: number, cy: number) => `${cx}|${cy}`;
   const grid = new Map<string, number[]>();
+
   for (let i = 0; i < n; i++) {
     const cx = Math.floor(xs[i] / cell);
     const cy = Math.floor(ys[i] / cell);
@@ -326,9 +392,8 @@ function buildPoleRouter(poles: PoleGroup[], poleEdgeCutoffMeters: number, poleK
   type Edge = { j: number; w: number; d: number };
   const adj: Edge[][] = Array.from({ length: n }, () => []);
   const seen = new Set<string>();
-
   const maxR = Math.max(1, Math.ceil(poleEdgeCutoffMeters / cell));
-  const stepSoft = Math.max(30, poleEdgeCutoffMeters * 0.6); // for penalty
+  const stepSoft = Math.max(30, poleEdgeCutoffMeters * 0.6);
 
   for (let i = 0; i < n; i++) {
     const cx = Math.floor(xs[i] / cell);
@@ -341,10 +406,12 @@ function buildPoleRouter(poles: PoleGroup[], poleEdgeCutoffMeters: number, poleK
       for (let dy = -maxR; dy <= maxR; dy++) {
         const arr = grid.get(key(cx + dx, cy + dy));
         if (!arr) continue;
+
         for (const j of arr) {
           if (j === i) continue;
           if (candSeen.has(j)) continue;
           candSeen.add(j);
+
           const d = Math.hypot(xs[j] - xs[i], ys[j] - ys[i]);
           if (d <= poleEdgeCutoffMeters) candidates.push({ j, d });
         }
@@ -352,6 +419,7 @@ function buildPoleRouter(poles: PoleGroup[], poleEdgeCutoffMeters: number, poleK
     }
 
     if (!candidates.length) continue;
+
     candidates.sort((a, b) => a.d - b.d);
     const take = candidates.slice(0, Math.max(1, Math.min(poleKNearest, candidates.length)));
 
@@ -362,7 +430,6 @@ function buildPoleRouter(poles: PoleGroup[], poleEdgeCutoffMeters: number, poleK
       if (seen.has(k2)) continue;
       seen.add(k2);
 
-      // penalty for long jump (biar lebih "ngikut tiang" dan gak loncat)
       const ratio = c.d / stepSoft;
       const w = c.d * (1 + ratio * ratio);
 
@@ -386,6 +453,7 @@ function buildPoleRouter(poles: PoleGroup[], poleEdgeCutoffMeters: number, poleK
       for (let dy = -r; dy <= r; dy++) {
         const arr = grid.get(key(cx + dx, cy + dy));
         if (!arr) continue;
+
         for (const i of arr) {
           const d = Math.hypot(xs[i] - x, ys[i] - y);
           if (d < best) {
@@ -395,6 +463,7 @@ function buildPoleRouter(poles: PoleGroup[], poleEdgeCutoffMeters: number, poleK
         }
       }
     }
+
     return bestIdx >= 0 && best <= maxMeters ? bestIdx : -1;
   }
 
@@ -415,8 +484,8 @@ function buildPoleRouter(poles: PoleGroup[], poleEdgeCutoffMeters: number, poleK
       dist[i] = Number.POSITIVE_INFINITY;
       prev[i] = -1;
     }
-    dist[s] = 0;
 
+    dist[s] = 0;
     const pq = new MinHeap<number>();
     pq.push(0, s);
 
@@ -433,6 +502,7 @@ function buildPoleRouter(poles: PoleGroup[], poleEdgeCutoffMeters: number, poleK
         const e = edges[ei];
         const v = e.j;
         if (visited[v]) continue;
+
         const nd = dist[u] + e.w;
         if (nd < dist[v]) {
           dist[v] = nd;
@@ -451,6 +521,7 @@ function buildPoleRouter(poles: PoleGroup[], poleEdgeCutoffMeters: number, poleK
       if (cur === s) break;
       cur = prev[cur];
     }
+
     out.reverse();
     pathCache.set(cacheKey, out);
     return out;
@@ -471,7 +542,6 @@ function buildPoleRouter(poles: PoleGroup[], poleEdgeCutoffMeters: number, poleK
     return { d: Math.hypot(px - cx, py - cy), t };
   }
 
-  // densify: ambil pole lain yang berada dekat garis antar 2 pole (biar gak “kelewatan”)
   function polesNearSegment(i: number, j: number, corridorMeters: number) {
     const ax = xs[i];
     const ay = ys[i];
@@ -497,6 +567,7 @@ function buildPoleRouter(poles: PoleGroup[], poleEdgeCutoffMeters: number, poleK
       for (let cy = cminy; cy <= cmaxy; cy++) {
         const arr = grid.get(key(cx, cy));
         if (!arr) continue;
+
         for (const p of arr) {
           if (used.has(p)) continue;
           const r = pointToSegDistAndT(xs[p], ys[p], ax, ay, bx, by);
@@ -509,8 +580,6 @@ function buildPoleRouter(poles: PoleGroup[], poleEdgeCutoffMeters: number, poleK
     }
 
     picks.sort((a, b) => a.t - b.t);
-
-    // safety: jangan kebanyakan kalau area super padat
     if (picks.length > 1200) return [];
     return picks.map((x) => x.idx);
   }
@@ -523,7 +592,6 @@ function buildPoleRouter(poles: PoleGroup[], poleEdgeCutoffMeters: number, poleK
     const idxPath = dijkstraPath(ia, ib);
     if (!idxPath || idxPath.length < 1) return null;
 
-    // corridor: agak lebar biar “semua tiang” kebawa
     const corridor = Math.max(18, Math.min(45, poleEdgeCutoffMeters * 0.45));
 
     const full: number[] = [idxPath[0]];
@@ -531,6 +599,7 @@ function buildPoleRouter(poles: PoleGroup[], poleEdgeCutoffMeters: number, poleK
       const u = idxPath[k];
       const v = idxPath[k + 1];
       const mids = polesNearSegment(u, v, corridor);
+
       for (const m of mids) {
         if (full[full.length - 1] !== m) full.push(m);
       }
@@ -547,7 +616,9 @@ function buildPoleRouter(poles: PoleGroup[], poleEdgeCutoffMeters: number, poleK
     }
 
     const last = out[out.length - 1];
-    if (!last || Math.abs(last[0] - b.lat) > 1e-10 || Math.abs(last[1] - b.lng) > 1e-10) out.push([b.lat, b.lng]);
+    if (!last || Math.abs(last[0] - b.lat) > 1e-10 || Math.abs(last[1] - b.lng) > 1e-10) {
+      out.push([b.lat, b.lng]);
+    }
 
     return out;
   }
@@ -560,80 +631,75 @@ export default function MapsPage() {
   const [map, setMap] = useState<LeafletMap | null>(null);
 
   const [selectedBase, setSelectedBase] = useState<"normal" | "satellite">("normal");
-
-  // Screenshot mode (tanpa shortcut keyboard)
   const [ssMode, setSsMode] = useState(false);
 
-  // ✅ Manual edit garis
+  // ===== manual line =====
   const [editMode, setEditMode] = useState(false);
   const [editingLineId, setEditingLineId] = useState<string | null>(null);
-
   const [draftPts, setDraftPts] = useState<DraftPoint[]>([]);
   const [savedLines, setSavedLines] = useState<SavedLine[]>([]);
   const [lineName, setLineName] = useState("");
-  const [lineColor, setLineColor] = useState("#000000"); // default selalu mulai hitam
-
-  // routing mode
+  const [lineColor, setLineColor] = useState("#000000");
   const [routeMode, setRouteMode] = useState<RouteMode>("poles");
   const [routingBusy, setRoutingBusy] = useState(false);
 
-  // poles routing params
   const [snapToPoleMaxMeters, setSnapToPoleMaxMeters] = useState(200);
   const [poleEdgeCutoffMeters, setPoleEdgeCutoffMeters] = useState(110);
   const [poleKNearest, setPoleKNearest] = useState(8);
 
-  // road routing cache
   const roadRouteCacheRef = useRef<Map<string, LatLng[]>>(new Map());
 
-  // delete click mode for lines
   const [deleteClickMode, setDeleteClickMode] = useState(false);
-
-  // ✅ kotak kelola garis bisa aktif / tidak
   const [manageLinesOn, setManageLinesOn] = useState(true);
 
-  // ULP (untuk TIANG)
+  // ===== ULP =====
   const [ulpList, setUlpList] = useState<string[]>([]);
   const [ulpLoading, setUlpLoading] = useState(false);
   const [selectedUlp, setSelectedUlp] = useState("");
 
-  // Tiang
+  // ===== poles =====
   const [bundleLoading, setBundleLoading] = useState(false);
   const [polesRaw, setPolesRaw] = useState<PolePointRaw[]>([]);
 
-  // LBS/REC global
-  const [sectionsLoading, setSectionsLoading] = useState(false);
-  const [sectionsAll, setSectionsAll] = useState<CatPoint[]>([]);
-  const sectionsLoadedOnce = useRef(false);
+  // ===== network nodes + section A-B =====
+  const [networkLoading, setNetworkLoading] = useState(false);
+  const [networkNodesRaw, setNetworkNodesRaw] = useState<NetNodeRaw[]>([]);
+  const [networkLinksRaw, setNetworkLinksRaw] = useState<SectionLinkRaw[]>([]);
+  const [autoSectionLines, setAutoSectionLines] = useState<AutoSectionLine[]>([]);
+  const [autoRouteBusy, setAutoRouteBusy] = useState(false);
+
+  const autoRouteCacheRef = useRef<Map<string, LatLng[]>>(new Map());
 
   const [errMsg, setErrMsg] = useState("");
   const [selectedPoint, setSelectedPoint] = useState<SelectedPoint | null>(null);
 
-  // sections UI
+  // ===== section/node UI =====
   const [showSectionPoints, setShowSectionPoints] = useState(true);
-  const [maxSectionDisplay, setMaxSectionDisplay] = useState(2000);
-  const [sectionFilter, setSectionFilter] = useState<"all" | "lbs" | "rec">("all");
+  const [showAutoSectionLines, setShowAutoSectionLines] = useState(true);
+  const [maxSectionDisplay, setMaxSectionDisplay] = useState(2500);
+  const [maxAutoSectionDisplay, setMaxAutoSectionDisplay] = useState(600);
+  const [sectionFilter, setSectionFilter] = useState<"all" | "gi" | "gh" | "lbs" | "rec">("all");
   const [secIdx, setSecIdx] = useState(0);
 
-  // anti-lag controls
+  // ===== anti lag =====
   const [viewportOnly, setViewportOnly] = useState(true);
   const [currentZoom, setCurrentZoom] = useState(11);
   const boundsRef = useRef<any>(null);
   const [boundsVersion, setBoundsVersion] = useState(0);
 
-  // icons memo (LBS/REC tetap)
+  const iconGi = useMemo(() => makePinIcon("G", COLOR_GI, 30), []);
+  const iconGh = useMemo(() => makePinIcon("H", COLOR_GH, 30), []);
   const iconLbs = useMemo(() => makePinIcon("L", COLOR_LBS, 30), []);
   const iconRec = useMemo(() => makePinIcon("R", COLOR_REC, 30), []);
 
-  // tiang kalau zoom jangan kekecilan
   const poleIconSize = useMemo(() => {
     const z = currentZoom;
-    const size = 34 - (z - 10) * 0.9; // turun pelan
+    const size = 34 - (z - 10) * 0.9;
     return Math.max(22, Math.min(34, Math.round(size)));
   }, [currentZoom]);
 
   const iconTiang = useMemo(() => makePoleIcon(COLOR_TIANG, poleIconSize), [poleIconSize]);
 
-  // canvas radius tiang juga jangan terlalu kecil
   const poleCanvasRadius = useMemo(() => {
     const z = currentZoom;
     const r = 4.0 - (z - 10) * 0.18;
@@ -643,7 +709,7 @@ export default function MapsPage() {
   const sectionCanvasRadius = useMemo(() => {
     const z = currentZoom;
     const r = 3.0 - (z - 10) * 0.2;
-    return Math.max(1.5, Math.min(3.0, r));
+    return Math.max(1.7, Math.min(3.0, r));
   }, [currentZoom]);
 
   const canvasStrokeWeight = useMemo(() => 1.35, []);
@@ -654,8 +720,9 @@ export default function MapsPage() {
   useEffect(() => {
     if (!mounted) return;
     try {
-      const raw = localStorage.getItem("w9_saved_lines_v3");
+      const raw = localStorage.getItem("w9_saved_lines_v4");
       if (!raw) return;
+
       const parsed = JSON.parse(raw);
       if (!Array.isArray(parsed)) return;
 
@@ -666,7 +733,9 @@ export default function MapsPage() {
                 .map((p: any) => ({
                   lat: Number(p?.lat),
                   lng: Number(p?.lng),
-                  kind: p?.kind === "REC" ? "REC" : "LBS",
+                  kind: ["GI", "GH", "LBS", "REC"].includes(String(p?.kind || "").toUpperCase())
+                    ? (String(p.kind).toUpperCase() as NodeKategori)
+                    : "LBS",
                 }))
                 .filter((p: DraftPoint) => Number.isFinite(p.lat) && Number.isFinite(p.lng))
             : [];
@@ -684,7 +753,7 @@ export default function MapsPage() {
             name: String(x?.name || "Line"),
             color: String(x?.color || "#000000"),
             points: pts,
-            path: path,
+            path,
             visible: x?.visible !== false,
             routeMode: rm,
             profile: "driving",
@@ -694,6 +763,7 @@ export default function MapsPage() {
             createdAt: Number.isFinite(Number(x?.createdAt)) ? Number(x.createdAt) : Date.now(),
             ulpAtCreate: typeof x?.ulpAtCreate === "string" ? x.ulpAtCreate : undefined,
           };
+
           if (!out.id || out.points.length < 2 || out.path.length < 2) return null;
           return out;
         })
@@ -708,13 +778,13 @@ export default function MapsPage() {
   useEffect(() => {
     if (!mounted) return;
     try {
-      localStorage.setItem("w9_saved_lines_v3", JSON.stringify(savedLines));
+      localStorage.setItem("w9_saved_lines_v4", JSON.stringify(savedLines));
     } catch {
       // ignore
     }
   }, [mounted, savedLines]);
 
-  // track bounds + zoom
+  // ===== track bounds =====
   useEffect(() => {
     if (!map) return;
 
@@ -734,7 +804,6 @@ export default function MapsPage() {
     };
   }, [map]);
 
-  // fokus ke titik TANPA zoom
   const focusTo = useCallback(
     (lat: number, lng: number) => {
       if (!map) return;
@@ -749,12 +818,14 @@ export default function MapsPage() {
     return window.confirm(`Yakin menghapus garis${label}?`);
   }, []);
 
-  // ===== draft helpers =====
   const addDraftPoint = useCallback((p: DraftPoint) => {
     setDraftPts((prev) => {
       if (!prev.length) return [p];
       const last = prev[prev.length - 1];
-      const same = Math.abs(last.lat - p.lat) < 1e-10 && Math.abs(last.lng - p.lng) < 1e-10 && last.kind === p.kind;
+      const same =
+        Math.abs(last.lat - p.lat) < 1e-10 &&
+        Math.abs(last.lng - p.lng) < 1e-10 &&
+        last.kind === p.kind;
       if (same) return prev;
       return [...prev, p];
     });
@@ -788,12 +859,23 @@ export default function MapsPage() {
     setLineColor("#000000");
   }, []);
 
-  // ===== load ulplist =====
+  // ===== load ULP =====
   const loadUlpList = useCallback(async () => {
     try {
       setUlpLoading(true);
       setErrMsg("");
-      const resp: any = await jsonp(BUNDLE_URL, { mode: "ulplist", up3: UP3 }, 60000);
+
+      const resp: any = await jsonp(
+        BUNDLE_URL,
+        {
+          mode: "ulplist",
+          up3: UP3,
+          cache: "1",
+          ttlMin: "1440",
+        },
+        60000
+      );
+
       if (!resp?.success || !Array.isArray(resp?.ulps)) throw new Error(resp?.error || "ulplist gagal");
       setUlpList(resp.ulps);
     } catch (e: any) {
@@ -808,48 +890,7 @@ export default function MapsPage() {
     loadUlpList();
   }, [loadUlpList]);
 
-  // ===== load sections global once =====
-  const loadSectionsOnce = useCallback(async () => {
-    if (sectionsLoadedOnce.current) return;
-    sectionsLoadedOnce.current = true;
-
-    try {
-      setSectionsLoading(true);
-      setErrMsg("");
-      const raw: any = await jsonp<any>(GAS_URL, { mode: "merge3", up3: UP3 }, 90000);
-      const arr: any[] = Array.isArray(raw)
-        ? raw
-        : Array.isArray(raw?.data)
-          ? raw.data
-          : Array.isArray(raw?.rows)
-            ? raw.rows
-            : [];
-
-      const cleaned: CatPoint[] = (arr || [])
-        .map((p: any) => ({
-          kategori: String(p?.kategori || "").toUpperCase(),
-          up3: String(p?.up3 || UP3),
-          latitude: Number(p?.latitude),
-          longitude: Number(p?.longitude),
-          count: Number(p?.count || 0),
-          items: Array.isArray(p?.items) ? p.items : [],
-        }))
-        .filter((p) => (p.kategori === "LBS" || p.kategori === "REC") && Number.isFinite(p.latitude) && Number.isFinite(p.longitude));
-
-      setSectionsAll(cleaned);
-    } catch (e: any) {
-      setErrMsg("Gagal load LBS/REC (merge3): " + String(e?.message || e));
-      setSectionsAll([]);
-    } finally {
-      setSectionsLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    loadSectionsOnce();
-  }, [loadSectionsOnce]);
-
-  // ===== load tiang by ulp =====
+  // ===== load poles lite =====
   useEffect(() => {
     (async () => {
       if (!selectedUlp) {
@@ -860,9 +901,38 @@ export default function MapsPage() {
       try {
         setErrMsg("");
         setBundleLoading(true);
-        const resp: any = await jsonp(BUNDLE_URL, { mode: "bundle", ulp: selectedUlp, up3: UP3, radius: "500" }, 90000);
-        if (!resp?.success) throw new Error(resp?.error || "bundle gagal");
-        setPolesRaw(Array.isArray(resp?.poles) ? resp.poles : []);
+
+        const resp: any = await jsonp(
+          BUNDLE_URL,
+          {
+            mode: "bundle",
+            ulp: selectedUlp,
+            up3: UP3,
+            lite: "1",
+            cache: "1",
+            ttlMin: "360",
+          },
+          90000
+        );
+
+        if (!resp?.success) throw new Error(resp?.error || "bundle lite gagal");
+
+        const poles: PolePointRaw[] = Array.isArray(resp?.poles)
+          ? resp.poles
+              .map((p: any) => ({
+                rowId: Number(p?.rowId),
+                ulp: String(p?.ulp || ""),
+                formattedAddress: String(p?.formattedAddress || ""),
+                streetAddress: String(p?.streetAddress || ""),
+                city: String(p?.city || ""),
+                owner: String(p?.owner || ""),
+                latitude: Number(p?.latitude),
+                longitude: Number(p?.longitude),
+              }))
+              .filter((p: PolePointRaw) => Number.isFinite(p.latitude) && Number.isFinite(p.longitude))
+          : [];
+
+        setPolesRaw(poles);
       } catch (e: any) {
         setErrMsg("Gagal load tiang: " + String(e?.message || e));
         setPolesRaw([]);
@@ -872,7 +942,95 @@ export default function MapsPage() {
     })();
   }, [selectedUlp]);
 
-  // ===== pole groups (dedup) =====
+  // ===== load network GI/GH/LBS/REC + SECTION A-B =====
+  useEffect(() => {
+    (async () => {
+      if (!selectedUlp) {
+        setNetworkNodesRaw([]);
+        setNetworkLinksRaw([]);
+        setAutoSectionLines([]);
+        return;
+      }
+
+      try {
+        setNetworkLoading(true);
+        setErrMsg("");
+
+        const resp: any = await jsonp(
+          BUNDLE_URL,
+          {
+            mode: "network",
+            ulp: selectedUlp,
+            up3: UP3,
+            cache: "1",
+            ttlMin: "120",
+          },
+          90000
+        );
+
+        if (!resp?.success) throw new Error(resp?.error || "network gagal");
+
+        const nodes: NetNodeRaw[] = Array.isArray(resp?.nodes)
+          ? resp.nodes
+              .map((x: any) => ({
+                rowId: Number(x?.rowId),
+                kategori: String(x?.kategori || "").toUpperCase() as NodeKategori,
+                keypoint: String(x?.keypoint || ""),
+                ulp: String(x?.ulp || ""),
+                up3: String(x?.up3 || ""),
+                status: String(x?.status || ""),
+                latitude: Number(x?.latitude),
+                longitude: Number(x?.longitude),
+              }))
+              .filter(
+                (x: NetNodeRaw) =>
+                  ["GI", "GH", "LBS", "REC"].includes(x.kategori) &&
+                  Number.isFinite(x.latitude) &&
+                  Number.isFinite(x.longitude)
+              )
+          : [];
+
+        const links: SectionLinkRaw[] = Array.isArray(resp?.links)
+          ? resp.links
+              .map((x: any) => ({
+                id: String(x?.id || ""),
+                rowId: Number(x?.rowId),
+                ulp: String(x?.ulp || ""),
+                up3: String(x?.up3 || ""),
+                section: String(x?.section || ""),
+                fromName: String(x?.fromName || ""),
+                fromKategori: String(x?.fromKategori || "").toUpperCase() as NodeKategori,
+                fromLat: Number(x?.fromLat),
+                fromLng: Number(x?.fromLng),
+                toName: String(x?.toName || ""),
+                toKategori: String(x?.toKategori || "").toUpperCase() as NodeKategori,
+                toLat: Number(x?.toLat),
+                toLng: Number(x?.toLng),
+              }))
+              .filter(
+                (x: SectionLinkRaw) =>
+                  !!x.id &&
+                  Number.isFinite(x.fromLat) &&
+                  Number.isFinite(x.fromLng) &&
+                  Number.isFinite(x.toLat) &&
+                  Number.isFinite(x.toLng)
+              )
+          : [];
+
+        setNetworkNodesRaw(nodes);
+        setNetworkLinksRaw(links);
+      } catch (e: any) {
+        setErrMsg("Gagal load network: " + String(e?.message || e));
+        setNetworkNodesRaw([]);
+        setNetworkLinksRaw([]);
+        setAutoSectionLines([]);
+      } finally {
+        setNetworkLoading(false);
+      }
+    })();
+  }, [selectedUlp]);
+
+  // ===== poles dedup =====
   const poleGroups = useMemo<PoleGroup[]>(() => {
     const m = new Map<string, PoleGroup>();
 
@@ -883,26 +1041,6 @@ export default function MapsPage() {
 
       const k = coordKey(lat, lng);
 
-      const lbsArr: AttachItem[] = (p.attach?.LBS || []).map((it) => ({
-        kategori: "LBS",
-        keypoint: it.keypoint || "",
-        status: it.status || "",
-        ulp: it.ulp || "",
-        srcLat: Number(it.srcLat),
-        srcLng: Number(it.srcLng),
-        distMeters: it.matchedDistMeters,
-      }));
-
-      const recArr: AttachItem[] = (p.attach?.REC || []).map((it) => ({
-        kategori: "REC",
-        keypoint: it.keypoint || "",
-        status: it.status || "",
-        ulp: it.ulp || "",
-        srcLat: Number(it.srcLat),
-        srcLng: Number(it.srcLng),
-        distMeters: it.matchedDistMeters,
-      }));
-
       if (!m.has(k)) {
         m.set(k, {
           key: k,
@@ -912,7 +1050,6 @@ export default function MapsPage() {
           rowIds: [p.rowId],
           owners: p.owner ? [String(p.owner)] : [],
           address: p.formattedAddress || p.streetAddress || "",
-          attach: { LBS: lbsArr, REC: recArr },
         });
       } else {
         const g = m.get(k)!;
@@ -924,42 +1061,58 @@ export default function MapsPage() {
         if (!g.address && (p.formattedAddress || p.streetAddress)) {
           g.address = p.formattedAddress || p.streetAddress || "";
         }
-        g.attach.LBS.push(...lbsArr);
-        g.attach.REC.push(...recArr);
       }
     }
 
     return Array.from(m.values());
   }, [polesRaw, selectedUlp]);
 
-  // ===== sections -> markers (unique coords) =====
+  // ===== section markers =====
   const sectionMarkersAll = useMemo<SectionMarker[]>(() => {
     const out = new Map<string, SectionMarker>();
 
-    for (const p of sectionsAll) {
+    for (const p of networkNodesRaw) {
       const k = coordKey(p.latitude, p.longitude);
+
       if (!out.has(k)) {
         out.set(k, {
           key: k,
           latitude: Number(p.latitude.toFixed(DEDUP_DECIMALS)),
           longitude: Number(p.longitude.toFixed(DEDUP_DECIMALS)),
+          giItems: [],
+          ghItems: [],
           lbsItems: [],
           recItems: [],
         });
       }
+
       const g = out.get(k)!;
-      if (p.kategori === "LBS") g.lbsItems.push(...(p.items || []));
-      if (p.kategori === "REC") g.recItems.push(...(p.items || []));
+      const item: CatItem = {
+        keypoint: p.keypoint || "",
+        ulp: p.ulp || "",
+        status: p.status || "",
+        kategori: p.kategori,
+      };
+
+      if (p.kategori === "GI") g.giItems.push(item);
+      if (p.kategori === "GH") g.ghItems.push(item);
+      if (p.kategori === "LBS") g.lbsItems.push(item);
+      if (p.kategori === "REC") g.recItems.push(item);
     }
 
     return Array.from(out.values());
-  }, [sectionsAll]);
+  }, [networkNodesRaw]);
 
   const sectionMarkersFiltered = useMemo(() => {
     return sectionMarkersAll.filter((m) => {
+      const gi = m.giItems.length;
+      const gh = m.ghItems.length;
       const lbs = m.lbsItems.length;
       const rec = m.recItems.length;
-      if (sectionFilter === "all") return lbs + rec > 0;
+
+      if (sectionFilter === "all") return gi + gh + lbs + rec > 0;
+      if (sectionFilter === "gi") return gi > 0;
+      if (sectionFilter === "gh") return gh > 0;
       if (sectionFilter === "lbs") return lbs > 0;
       return rec > 0;
     });
@@ -969,7 +1122,6 @@ export default function MapsPage() {
   const canShowSections = showSectionPoints;
   const poleInteractionLocked = editMode || deleteClickMode;
 
-  // viewport filter
   const poleGroupsDisplayed = useMemo(() => {
     if (!canShowPoles) return [];
     let list = poleGroups;
@@ -981,26 +1133,128 @@ export default function MapsPage() {
   const sectionMarkersDisplayed = useMemo(() => {
     if (!canShowSections) return [];
     let list = sectionMarkersFiltered;
-
     const b = viewportOnly ? boundsRef.current : null;
     if (b) list = list.filter((m) => b.contains([m.latitude, m.longitude] as any));
-
     return list.slice(0, Math.max(1, maxSectionDisplay));
   }, [sectionMarkersFiltered, canShowSections, maxSectionDisplay, viewportOnly, boundsVersion]);
 
+  const poleRouter = useMemo(() => {
+    if (!poleGroups.length) return null;
+    return buildPoleRouter(poleGroups, poleEdgeCutoffMeters, poleKNearest);
+  }, [poleGroups, poleEdgeCutoffMeters, poleKNearest]);
+
+  // ===== auto route section A-B ngikut tiang =====
+  useEffect(() => {
+    let cancelled = false;
+
+    (async () => {
+      if (!selectedUlp || !showAutoSectionLines || !poleRouter || !networkLinksRaw.length) {
+        setAutoSectionLines([]);
+        return;
+      }
+
+      try {
+        setAutoRouteBusy(true);
+        const out: AutoSectionLine[] = [];
+
+        for (let i = 0; i < networkLinksRaw.length; i++) {
+          if (cancelled) return;
+
+          const link = networkLinksRaw[i];
+
+          const cacheKey = [
+            selectedUlp,
+            link.id,
+            coordKey6(link.fromLat, link.fromLng),
+            coordKey6(link.toLat, link.toLng),
+            snapToPoleMaxMeters,
+            poleEdgeCutoffMeters,
+            poleKNearest,
+          ].join("|");
+
+          let path = autoRouteCacheRef.current.get(cacheKey);
+
+          if (!path) {
+            path =
+              poleRouter.routeBetween(
+                { lat: link.fromLat, lng: link.fromLng },
+                { lat: link.toLat, lng: link.toLng },
+                snapToPoleMaxMeters
+              ) ??
+              ([
+                [link.fromLat, link.fromLng],
+                [link.toLat, link.toLng],
+              ] as LatLng[]);
+
+            autoRouteCacheRef.current.set(cacheKey, path);
+          }
+
+          out.push({
+            ...link,
+            path,
+            bbox: calcPathBBox(path),
+          });
+
+          // yield dikit biar UI nggak freeze
+          if (i > 0 && i % 15 === 0) {
+            await new Promise((r) => setTimeout(r, 0));
+          }
+        }
+
+        if (!cancelled) setAutoSectionLines(out);
+      } finally {
+        if (!cancelled) setAutoRouteBusy(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    selectedUlp,
+    showAutoSectionLines,
+    poleRouter,
+    networkLinksRaw,
+    snapToPoleMaxMeters,
+    poleEdgeCutoffMeters,
+    poleKNearest,
+  ]);
+
+  const autoSectionLinesDisplayed = useMemo(() => {
+    if (!showAutoSectionLines) return [];
+    let list = autoSectionLines;
+    const b = viewportOnly ? boundsRef.current : null;
+    if (b) list = list.filter((l) => bboxIntersectsBounds(l.bbox, b));
+    return list.slice(0, Math.max(1, maxAutoSectionDisplay));
+  }, [autoSectionLines, showAutoSectionLines, viewportOnly, boundsVersion, maxAutoSectionDisplay]);
+
   useEffect(() => {
     setSecIdx(0);
-  }, [showSectionPoints, maxSectionDisplay, sectionFilter]);
+  }, [showSectionPoints, maxSectionDisplay, sectionFilter, selectedUlp]);
 
   const sectionStats = useMemo(() => {
+    let giItems = 0;
+    let ghItems = 0;
     let lbsItems = 0;
     let recItems = 0;
+
     for (const s of sectionMarkersFiltered) {
+      giItems += s.giItems.length;
+      ghItems += s.ghItems.length;
       lbsItems += s.lbsItems.length;
       recItems += s.recItems.length;
     }
-    return { titikUnik: sectionMarkersFiltered.length, lbsItems, recItems, shown: sectionMarkersDisplayed.length };
-  }, [sectionMarkersFiltered, sectionMarkersDisplayed]);
+
+    return {
+      titikUnik: sectionMarkersFiltered.length,
+      giItems,
+      ghItems,
+      lbsItems,
+      recItems,
+      shown: sectionMarkersDisplayed.length,
+      autoLinksShown: autoSectionLinesDisplayed.length,
+    };
+  }, [sectionMarkersFiltered, sectionMarkersDisplayed, autoSectionLinesDisplayed]);
 
   const gotoSectionIndex = (idx: number) => {
     const list = sectionMarkersDisplayed;
@@ -1014,12 +1268,14 @@ export default function MapsPage() {
 
   const renderItems = (items: CatItem[], max = 10) => {
     if (!items.length) return <div style={{ color: "#666" }}>-</div>;
+
     const shown = items.slice(0, max);
     return (
       <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
         {shown.map((it, i) => (
           <div key={i} style={{ padding: "6px 8px", border: "1px solid #eee", borderRadius: 8 }}>
             <div style={{ fontWeight: 700 }}>{it.keypoint || "-"}</div>
+            <div style={{ fontSize: 12, color: "#444" }}>Kategori: {it.kategori || "-"}</div>
             <div style={{ fontSize: 12, color: "#444" }}>ULP: {it.ulp || "-"}</div>
             <div style={{ fontSize: 12, color: "#444" }}>Status: {it.status || "-"}</div>
           </div>
@@ -1032,23 +1288,15 @@ export default function MapsPage() {
   const THRESHOLD_DOM_MARKERS = 1500;
   const polesUseCanvas = poleGroupsDisplayed.length > THRESHOLD_DOM_MARKERS;
   const sectionsUseCanvas = sectionMarkersDisplayed.length > THRESHOLD_DOM_MARKERS;
+  const autoLineTooltipEnabled = autoSectionLinesDisplayed.length <= 300;
 
-  // ===== build pole router (pakai semua pole ULP) =====
-  const poleRouter = useMemo(() => {
-    if (routeMode !== "poles") return null;
-    if (!poleGroups.length) return null;
-    return buildPoleRouter(poleGroups, poleEdgeCutoffMeters, poleKNearest);
-  }, [routeMode, poleGroups, poleEdgeCutoffMeters, poleKNearest]);
-
-  // ===== build line path based on mode =====
+  // ===== build manual line path =====
   const buildLinePath = useCallback(
     async (pts: DraftPoint[], rm: RouteMode): Promise<LatLng[]> => {
       if (pts.length < 2) return pts.map((p) => [p.lat, p.lng] as LatLng);
 
-      // straight
       if (rm === "straight") return pts.map((p) => [p.lat, p.lng] as LatLng);
 
-      // road (OSRM pairwise + cache)
       if (rm === "road") {
         const out: LatLng[] = [];
         const profile: "driving" = "driving";
@@ -1075,28 +1323,29 @@ export default function MapsPage() {
         return out;
       }
 
-      // poles (ngikut tiang, plus densify biar gak “kelewatan”)
       const router = poleRouter;
-      if (!router) {
-        return pts.map((p) => [p.lat, p.lng] as LatLng);
-      }
+      if (!router) return pts.map((p) => [p.lat, p.lng] as LatLng);
 
       const out: LatLng[] = [];
       for (let i = 0; i < pts.length - 1; i++) {
         const a = pts[i];
         const b = pts[i + 1];
         const seg =
-          router.routeBetween({ lat: a.lat, lng: a.lng }, { lat: b.lat, lng: b.lng }, snapToPoleMaxMeters) ??
-          ([[a.lat, a.lng], [b.lat, b.lng]] as LatLng[]);
+          router.routeBetween(
+            { lat: a.lat, lng: a.lng },
+            { lat: b.lat, lng: b.lng },
+            snapToPoleMaxMeters
+          ) ?? ([[a.lat, a.lng], [b.lat, b.lng]] as LatLng[]);
+
         if (out.length === 0) out.push(...seg);
         else out.push(...seg.slice(1));
       }
+
       return out;
     },
     [poleRouter, snapToPoleMaxMeters]
   );
 
-  // ===== start edit existing line =====
   const startEditLine = useCallback((l: SavedLine) => {
     setEditMode(true);
     setEditingLineId(l.id);
@@ -1116,7 +1365,6 @@ export default function MapsPage() {
     setLineColor("#000000");
   }, []);
 
-  // ===== SAVE / UPDATE line =====
   const saveOrUpdateLine = useCallback(async () => {
     if (draftPts.length < 2) return;
     if (routingBusy) return;
@@ -1150,18 +1398,19 @@ export default function MapsPage() {
         const idx = prev.findIndex((x) => x.id === id);
         if (idx >= 0) {
           const copy = [...prev];
-          copy[idx] = { ...line, createdAt: prev[idx].createdAt, ulpAtCreate: prev[idx].ulpAtCreate ?? line.ulpAtCreate };
+          copy[idx] = {
+            ...line,
+            createdAt: prev[idx].createdAt,
+            ulpAtCreate: prev[idx].ulpAtCreate ?? line.ulpAtCreate,
+          };
           return copy;
         }
         return [...prev, line];
       });
 
-      // reset draft
       setDraftPts([]);
       setLineName("");
       setEditingLineId(null);
-
-      // setelah simpan, balik ke hitam biar selalu mulai hitam
       setLineColor("#000000");
     } catch (e: any) {
       setErrMsg("Gagal bikin garis: " + String(e?.message || e));
@@ -1182,17 +1431,18 @@ export default function MapsPage() {
     selectedUlp,
   ]);
 
-  // ===== click LBS/REC =====
-  const onClickLbsRec = useCallback(
-    (s: SectionMarker, clickedLat: number, clickedLng: number, kind: "LBS" | "REC") => {
+  const onClickNode = useCallback(
+    (s: SectionMarker, clickedLat: number, clickedLng: number, kind: NodeKategori) => {
       setSelectedPoint({ kind: "section", data: s });
       focusTo(clickedLat, clickedLng);
-      if (editMode) addDraftPoint({ lat: clickedLat, lng: clickedLng, kind });
+
+      if (editMode) {
+        addDraftPoint({ lat: clickedLat, lng: clickedLng, kind });
+      }
     },
     [focusTo, editMode, addDraftPoint]
   );
 
-  // ===== when edit mode OFF, clear draft + editing id =====
   useEffect(() => {
     if (!editMode) {
       setDraftPts([]);
@@ -1250,12 +1500,22 @@ export default function MapsPage() {
               const s = selectedPoint.data;
               return (
                 <div style={{ marginTop: 8 }}>
-                  <div style={{ fontWeight: 800 }}>LBS/REC</div>
+                  <div style={{ fontWeight: 800 }}>NODE</div>
                   <div style={{ color: "#666", marginTop: 2 }}>
                     {s.latitude.toFixed(6)}, {s.longitude.toFixed(6)}
                   </div>
 
                   <div style={{ marginTop: 8, borderTop: "1px solid #eee", paddingTop: 8 }}>
+                    <div style={{ color: COLOR_GI.stroke, fontWeight: 800 }}>GI ({s.giItems.length})</div>
+                    <div style={{ marginTop: 6 }}>{renderItems(s.giItems, 8)}</div>
+                  </div>
+
+                  <div style={{ marginTop: 10, borderTop: "1px solid #eee", paddingTop: 8 }}>
+                    <div style={{ color: COLOR_GH.stroke, fontWeight: 800 }}>GH ({s.ghItems.length})</div>
+                    <div style={{ marginTop: 6 }}>{renderItems(s.ghItems, 8)}</div>
+                  </div>
+
+                  <div style={{ marginTop: 10, borderTop: "1px solid #eee", paddingTop: 8 }}>
                     <div style={{ color: COLOR_LBS.stroke, fontWeight: 800 }}>LBS ({s.lbsItems.length})</div>
                     <div style={{ marginTop: 6 }}>{renderItems(s.lbsItems, 8)}</div>
                   </div>
@@ -1284,7 +1544,7 @@ export default function MapsPage() {
         </div>
       )}
 
-      {/* LEFT BOTTOM: EDIT / KELOLA GARIS */}
+      {/* LEFT BOTTOM */}
       {!ssMode && (
         <div
           style={{
@@ -1305,7 +1565,9 @@ export default function MapsPage() {
           <b>Garis</b>
 
           <div style={{ marginTop: 8, color: "#555", lineHeight: 1.4 }}>
-            Edit/kelola garis dipisah ke panel kiri.
+            Jalur auto dari <b>SECTION A - B</b> jalan sendiri.
+            <br />
+            Garis manual tetap bisa dipakai.
             <br />
             Tiang <b>{poleInteractionLocked ? "dikunci" : "aktif"}</b> saat edit/hapus garis.
           </div>
@@ -1356,7 +1618,7 @@ export default function MapsPage() {
 
             <label style={{ display: "flex", gap: 8, alignItems: "center", marginTop: 10 }}>
               <input type="checkbox" checked={deleteClickMode} onChange={(e) => setDeleteClickMode(e.target.checked)} />
-              <span style={{ color: "#555" }}>Mode hapus (klik garis)</span>
+              <span style={{ color: "#555" }}>Mode hapus (klik garis manual)</span>
             </label>
 
             <div style={{ display: "flex", gap: 8, marginTop: 10, alignItems: "center" }}>
@@ -1378,7 +1640,7 @@ export default function MapsPage() {
                 <summary style={{ cursor: "pointer", fontWeight: 800, color: "#333" }}>Pengaturan ikut tiang</summary>
 
                 <div style={{ marginTop: 10, color: "#777", fontSize: 11 }}>
-                  Garis akan “melewati banyak tiang” (densify) supaya tidak loncat/kelewatan.
+                  Garis auto section juga pakai ini.
                 </div>
 
                 <div style={{ display: "flex", gap: 8, marginTop: 10, alignItems: "center" }}>
@@ -1428,7 +1690,7 @@ export default function MapsPage() {
             <div style={{ marginTop: 8, color: "#777", fontSize: 11, lineHeight: 1.35 }}>
               {editMode ? (
                 <>
-                  Klik marker LBS/REC untuk tambah titik. Draft: <b>{draftPts.length}</b>
+                  Klik marker GI/GH/LBS/REC untuk tambah titik. Draft: <b>{draftPts.length}</b>
                 </>
               ) : (
                 <>Aktifkan ON untuk mulai nyambung titik.</>
@@ -1440,7 +1702,7 @@ export default function MapsPage() {
               <input
                 value={lineName}
                 onChange={(e) => setLineName(e.target.value)}
-                placeholder="mis: LBS1-REC2"
+                placeholder="mis: GI1-LBS2"
                 style={{ flex: 1, padding: 6, border: "1px solid #ddd", borderRadius: 6 }}
                 disabled={!editMode}
               />
@@ -1495,14 +1757,14 @@ export default function MapsPage() {
             </button>
 
             <div style={{ marginTop: 10, color: "#555" }}>
-              Total line tersimpan: <b>{savedLines.length}</b>
+              Total line manual: <b>{savedLines.length}</b>
             </div>
           </div>
 
           {/* KELOLA GARIS */}
           <div style={{ marginTop: 10, paddingTop: 10, borderTop: "1px solid #eee" }}>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
-              <div style={{ fontWeight: 800 }}>Kelola Garis</div>
+              <div style={{ fontWeight: 800 }}>Kelola Garis Manual</div>
               <label style={{ display: "flex", gap: 8, alignItems: "center" }}>
                 <input type="checkbox" checked={manageLinesOn} onChange={(e) => setManageLinesOn(e.target.checked)} />
                 <span style={{ color: "#555" }}>Aktif</span>
@@ -1511,10 +1773,10 @@ export default function MapsPage() {
 
             {!manageLinesOn ? (
               <div style={{ marginTop: 8, color: "#777", fontSize: 11 }}>
-                Nonaktif: daftar garis disembunyikan biar panel nggak panjang.
+                Nonaktif: daftar garis disembunyikan.
               </div>
             ) : savedLines.length === 0 ? (
-              <div style={{ marginTop: 8, color: "#777", fontSize: 11 }}>Belum ada line.</div>
+              <div style={{ marginTop: 8, color: "#777", fontSize: 11 }}>Belum ada line manual.</div>
             ) : (
               <>
                 <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 10 }}>
@@ -1589,14 +1851,11 @@ export default function MapsPage() {
                       </div>
 
                       <div style={{ marginTop: 4, color: "#666", fontSize: 11 }}>
-                        Titik: <b>{l.points.length}</b> • mode: <b>{l.routeMode === "poles" ? "tiang" : l.routeMode === "road" ? "jalan" : "lurus"}</b>
+                        Titik: <b>{l.points.length}</b> • mode:{" "}
+                        <b>{l.routeMode === "poles" ? "tiang" : l.routeMode === "road" ? "jalan" : "lurus"}</b>
                       </div>
                     </div>
                   ))}
-                </div>
-
-                <div style={{ marginTop: 10, color: "#777", fontSize: 11 }}>
-                  Tip: kalau panel kepanjangan, matikan tombol <b>Aktif</b> di atas.
                 </div>
               </>
             )}
@@ -1615,7 +1874,7 @@ export default function MapsPage() {
             background: "white",
             padding: 10,
             borderRadius: 10,
-            width: 360,
+            width: 380,
             boxShadow: "0px 2px 10px rgba(0,0,0,0.2)",
             fontSize: 12,
             maxHeight: "calc(100vh - 32px)",
@@ -1624,7 +1883,7 @@ export default function MapsPage() {
         >
           <b>Panel</b>
 
-          {/* ULP / TIANG DIPINDAH KE ATAS */}
+          {/* ULP */}
           <div style={{ marginTop: 10, paddingTop: 10, borderTop: "1px solid #eee" }}>
             <div style={{ fontWeight: 800 }}>Tiang (pilih ULP)</div>
 
@@ -1669,14 +1928,14 @@ export default function MapsPage() {
             ) : null}
           </div>
 
-          <div style={{ marginTop: 10, color: "#444" }}>
+          <div style={{ marginTop: 10, color: "#444", lineHeight: 1.5 }}>
             Zoom: <b>{currentZoom}</b> • viewportOnly: <b>{viewportOnly ? "ON" : "OFF"}</b>
             <br />
-            LBS/REC: {sectionsLoading ? "loading..." : "ok"} • shown: <b>{sectionStats.shown}</b>
+            Network: {networkLoading ? "loading..." : "ok"} • node: <b>{networkNodesRaw.length}</b> • link: <b>{networkLinksRaw.length}</b>
             <br />
-            Tiang: {bundleLoading ? "loading..." : "ok"} • ULP: <b>{selectedUlp || "-"}</b>
+            Auto route section: <b>{autoRouteBusy ? "routing..." : "idle"}</b> • tampil: <b>{autoSectionLinesDisplayed.length}</b>
             <br />
-            Routing: <b>{routingBusy ? "routing..." : "idle"}</b>
+            Tiang: {bundleLoading ? "loading..." : "ok"} • ULP: <b>{selectedUlp || "-"}</b> • pole: <b>{poleGroups.length}</b>
             {errMsg ? <div style={{ color: "#d32f2f", marginTop: 6 }}>{errMsg}</div> : null}
           </div>
 
@@ -1692,28 +1951,48 @@ export default function MapsPage() {
             <div style={{ fontWeight: 800 }}>Anti-lag</div>
             <label style={{ display: "flex", gap: 8, alignItems: "center", marginTop: 8 }}>
               <input type="checkbox" checked={viewportOnly} onChange={(e) => setViewportOnly(e.target.checked)} />
-              <span style={{ color: "#555" }}>Render hanya yang terlihat (viewport)</span>
+              <span style={{ color: "#555" }}>Render hanya area terlihat</span>
             </label>
+
+            <div style={{ display: "flex", gap: 8, marginTop: 10, alignItems: "center" }}>
+              <div style={{ width: 150, color: "#555" }}>Max auto line tampil</div>
+              <input
+                type="number"
+                value={maxAutoSectionDisplay}
+                min={50}
+                max={5000}
+                onChange={(e) => setMaxAutoSectionDisplay(Number(e.target.value || 0))}
+                style={{ flex: 1, padding: 6, border: "1px solid #ddd", borderRadius: 6 }}
+              />
+            </div>
           </div>
 
           <div style={{ marginTop: 10, paddingTop: 10, borderTop: "1px solid #eee" }}>
-            <div style={{ fontWeight: 800 }}>LBS/REC global</div>
+            <div style={{ fontWeight: 800 }}>Node GI / GH / LBS / REC</div>
+
             <label style={{ display: "flex", gap: 8, alignItems: "center", marginTop: 10 }}>
               <input type="checkbox" checked={showSectionPoints} onChange={(e) => setShowSectionPoints(e.target.checked)} />
-              <span style={{ color: "#555" }}>Tampilkan LBS/REC</span>
+              <span style={{ color: "#555" }}>Tampilkan node</span>
+            </label>
+
+            <label style={{ display: "flex", gap: 8, alignItems: "center", marginTop: 10 }}>
+              <input type="checkbox" checked={showAutoSectionLines} onChange={(e) => setShowAutoSectionLines(e.target.checked)} />
+              <span style={{ color: "#555" }}>Tampilkan jalur auto dari SECTION (A - B)</span>
             </label>
 
             <div style={{ display: "flex", gap: 8, marginTop: 10, alignItems: "center" }}>
               <div style={{ width: 110, color: "#555" }}>Filter</div>
               <select value={sectionFilter} onChange={(e) => setSectionFilter(e.target.value as any)} style={{ flex: 1, padding: 6 }}>
                 <option value="all">Semua</option>
+                <option value="gi">GI saja</option>
+                <option value="gh">GH saja</option>
                 <option value="lbs">LBS saja</option>
                 <option value="rec">REC saja</option>
               </select>
             </div>
 
             <div style={{ display: "flex", gap: 8, marginTop: 10, alignItems: "center" }}>
-              <div style={{ width: 110, color: "#555" }}>Max</div>
+              <div style={{ width: 110, color: "#555" }}>Max node</div>
               <input
                 type="number"
                 value={maxSectionDisplay}
@@ -1722,6 +2001,12 @@ export default function MapsPage() {
                 onChange={(e) => setMaxSectionDisplay(Number(e.target.value || 0))}
                 style={{ flex: 1, padding: 6, border: "1px solid #ddd", borderRadius: 6 }}
               />
+            </div>
+
+            <div style={{ marginTop: 10, color: "#555", lineHeight: 1.5 }}>
+              Node unik: <b>{sectionStats.titikUnik}</b> • tampil: <b>{sectionStats.shown}</b>
+              <br />
+              GI <b>{sectionStats.giItems}</b> • GH <b>{sectionStats.ghItems}</b> • LBS <b>{sectionStats.lbsItems}</b> • REC <b>{sectionStats.recItems}</b>
             </div>
 
             <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
@@ -1760,7 +2045,36 @@ export default function MapsPage() {
           <TileLayer url="https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}" maxZoom={20} />
         )}
 
-        {/* GARIS: saved lines */}
+        {/* AUTO SECTION LINES */}
+        {showAutoSectionLines &&
+          autoSectionLinesDisplayed.map((l) => (
+            <Polyline
+              key={`auto-${l.id}`}
+              positions={l.path as any}
+              pathOptions={{
+                color: "#ff9800",
+                weight: 3,
+                opacity: 0.9,
+                dashArray: "8 8",
+              }}
+            >
+              {!ssMode && autoLineTooltipEnabled ? (
+                <Tooltip sticky direction="top" opacity={1}>
+                  <div style={{ fontSize: 12, minWidth: 220 }}>
+                    <div style={{ fontWeight: 800 }}>{l.section}</div>
+                    <div style={{ marginTop: 4 }}>
+                      {l.fromKategori} <b>{l.fromName}</b>
+                    </div>
+                    <div>
+                      {l.toKategori} <b>{l.toName}</b>
+                    </div>
+                  </div>
+                </Tooltip>
+              ) : null}
+            </Polyline>
+          ))}
+
+        {/* SAVED MANUAL LINES */}
         {savedLines
           .filter((l) => l.visible && l.path.length >= 2)
           .map((l) => (
@@ -1777,80 +2091,95 @@ export default function MapsPage() {
             />
           ))}
 
-        {/* GARIS: draft preview */}
+        {/* DRAFT LINE */}
         {draftPts.length >= 2 && (
-          <Polyline positions={draftPts.map((p) => [p.lat, p.lng]) as any} pathOptions={{ color: lineColor, weight: 4, opacity: 0.75 }} />
+          <Polyline
+            positions={draftPts.map((p) => [p.lat, p.lng]) as any}
+            pathOptions={{ color: lineColor, weight: 4, opacity: 0.75 }}
+          />
         )}
 
-        {/* LBS/REC */}
+        {/* GI/GH/LBS/REC NODES */}
         {canShowSections &&
           (sectionsUseCanvas
             ? sectionMarkersDisplayed.map((s) => {
                 const baseLat = s.latitude;
                 const baseLng = s.longitude;
-                const lbs = s.lbsItems.length;
-                const rec = s.recItems.length;
 
-                const off = 0.00006;
-                const lbsLat = baseLat;
-                const lbsLng = baseLng;
-                const recLat = baseLat + (lbs > 0 ? off : 0);
-                const recLng = baseLng + (lbs > 0 ? off : 0);
+                const nodes = [
+                  { kind: "GI" as NodeKategori, count: s.giItems.length, lat: baseLat, lng: baseLng, color: COLOR_GI },
+                  { kind: "GH" as NodeKategori, count: s.ghItems.length, lat: baseLat + 0.00005, lng: baseLng - 0.00005, color: COLOR_GH },
+                  { kind: "LBS" as NodeKategori, count: s.lbsItems.length, lat: baseLat, lng: baseLng + 0.00006, color: COLOR_LBS },
+                  { kind: "REC" as NodeKategori, count: s.recItems.length, lat: baseLat + 0.00006, lng: baseLng + 0.00006, color: COLOR_REC },
+                ].filter((x) => x.count > 0);
 
                 return (
                   <Fragment key={`secC-wrap-${s.key}`}>
-                    {lbs > 0 ? (
+                    {nodes.map((m) => (
                       <CircleMarker
-                        key={`lbsC-${s.key}`}
-                        center={[lbsLat, lbsLng]}
+                        key={`${m.kind}-${s.key}`}
+                        center={[m.lat, m.lng]}
                         radius={sectionCanvasRadius}
                         pathOptions={{
-                          color: COLOR_LBS.stroke,
+                          color: m.color.stroke,
                           weight: canvasStrokeWeight,
-                          fillColor: COLOR_LBS.fill,
+                          fillColor: m.color.fill,
                           fillOpacity: 0.9,
                         }}
                         eventHandlers={{
-                          click: () => onClickLbsRec(s, lbsLat, lbsLng, "LBS"),
+                          click: () => onClickNode(s, m.lat, m.lng, m.kind),
                         }}
                       />
-                    ) : null}
-                    {rec > 0 ? (
-                      <CircleMarker
-                        key={`recC-${s.key}`}
-                        center={[recLat, recLng]}
-                        radius={sectionCanvasRadius}
-                        pathOptions={{
-                          color: COLOR_REC.stroke,
-                          weight: canvasStrokeWeight,
-                          fillColor: COLOR_REC.fill,
-                          fillOpacity: 0.9,
-                        }}
-                        eventHandlers={{
-                          click: () => onClickLbsRec(s, recLat, recLng, "REC"),
-                        }}
-                      />
-                    ) : null}
+                    ))}
                   </Fragment>
                 );
               })
             : sectionMarkersDisplayed.map((s) => {
-                const lbs = s.lbsItems.length;
-                const rec = s.recItems.length;
-
                 const baseLat = s.latitude;
                 const baseLng = s.longitude;
-                const off = 0.00006;
 
-                const markers: Array<{ key: string; pos: [number, number]; icon: DivIcon; title: "LBS" | "REC" }> = [];
-                if (lbs > 0) markers.push({ key: `lbs-${s.key}`, pos: [baseLat, baseLng], icon: iconLbs, title: "LBS" });
-                if (rec > 0)
+                const markers: Array<{
+                  key: string;
+                  pos: [number, number];
+                  icon: DivIcon;
+                  title: NodeKategori;
+                }> = [];
+
+                if (s.giItems.length > 0) {
+                  markers.push({
+                    key: `gi-${s.key}`,
+                    pos: [baseLat, baseLng],
+                    icon: iconGi,
+                    title: "GI",
+                  });
+                }
+
+                if (s.ghItems.length > 0) {
+                  markers.push({
+                    key: `gh-${s.key}`,
+                    pos: [baseLat + 0.00005, baseLng - 0.00005],
+                    icon: iconGh,
+                    title: "GH",
+                  });
+                }
+
+                if (s.lbsItems.length > 0) {
+                  markers.push({
+                    key: `lbs-${s.key}`,
+                    pos: [baseLat, baseLng + 0.00006],
+                    icon: iconLbs,
+                    title: "LBS",
+                  });
+                }
+
+                if (s.recItems.length > 0) {
                   markers.push({
                     key: `rec-${s.key}`,
-                    pos: [baseLat + (lbs > 0 ? off : 0), baseLng + (lbs > 0 ? off : 0)],
+                    pos: [baseLat + 0.00006, baseLng + 0.00006],
                     icon: iconRec,
                     title: "REC",
                   });
+                }
 
                 return markers.map((m) => (
                   <Marker
@@ -1858,7 +2187,7 @@ export default function MapsPage() {
                     position={m.pos}
                     icon={m.icon}
                     eventHandlers={{
-                      click: () => onClickLbsRec(s, m.pos[0], m.pos[1], m.title),
+                      click: () => onClickNode(s, m.pos[0], m.pos[1], m.title),
                     }}
                   >
                     {!ssMode && (
@@ -1867,7 +2196,7 @@ export default function MapsPage() {
                           <div style={{ fontWeight: 700 }}>{m.title}</div>
                           <div style={{ marginTop: 4, color: "#666" }}>{fmtCoord(baseLat, baseLng)}</div>
                           <div style={{ marginTop: 6 }}>
-                            LBS <b>{lbs}</b> • REC <b>{rec}</b>
+                            GI <b>{s.giItems.length}</b> • GH <b>{s.ghItems.length}</b> • LBS <b>{s.lbsItems.length}</b> • REC <b>{s.recItems.length}</b>
                           </div>
                         </div>
                       </Tooltip>
@@ -1876,7 +2205,7 @@ export default function MapsPage() {
                 ));
               }))}
 
-        {/* TIANG */}
+        {/* POLES */}
         {canShowPoles &&
           (polesUseCanvas
             ? poleGroupsDisplayed.map((g) => (
