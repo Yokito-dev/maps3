@@ -42,15 +42,15 @@ const mapScheduleData = (data: any[]): Event[] =>
     const colorFromSheet = (d.colour || d.color || "").toString().trim();
     const sheetColorHex =
       /red/i.test(colorFromSheet) ? "#f87171" :
-      /green/i.test(colorFromSheet) ? "#86efac" :
-      /^#([0-9a-f]{3}|[0-9a-f]{6})/i.test(colorFromSheet) ? colorFromSheet :
-      "";
+        /green/i.test(colorFromSheet) ? "#86efac" :
+          /^#([0-9a-f]{3}|[0-9a-f]{6})/i.test(colorFromSheet) ? colorFromSheet :
+            "";
 
     const progressText = (d.progress || d.progress_gd || "").toString().toUpperCase();
     const fallbackHex =
       /SELESAI|CLOSE/i.test(progressText) ? "#fca5a5" :
-      /OPEN/i.test(progressText) ? "#86efac" :
-      "#7dd3fc";
+        /OPEN/i.test(progressText) ? "#86efac" :
+          "#7dd3fc";
 
     return {
       id: String(d.id ?? ("GD-" + (d.start_date || "") + "-" + idx)),
@@ -142,11 +142,11 @@ export default function SchedulePage() {
 
   /* ================= UI helpers ================= */
   const bulan = [
-    'Januari','Februari','Maret','April','Mei','Juni',
-    'Juli','Agustus','September','Oktober','November','Desember'
+    'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
+    'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'
   ];
-  const hari = ['Minggu','Senin','Selasa','Rabu','Kamis','Jumat','Sabtu'];
-  const hariGrid = ['Min','Sen','Sel','Rab','Kam','Jum','Sab'];
+  const hari = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
+  const hariGrid = ['Min', 'Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab'];
 
   const baseDate = selectedDate || currentDate;
   const getEvents = (d: Date) => events.filter(e => sameDay(e.start_date, d));
@@ -218,14 +218,14 @@ export default function SchedulePage() {
     setDetailData(ev); // data is the event object (you can replace with fetched detail)
     setOpenDetailId(String(ev.id));
     setOpeningDetail(false);
-    try { window.history.pushState(null, '', `/schedule-gd/${ev.id}`); } catch (e) {}
+    try { window.history.pushState(null, '', `/schedule-gd/${ev.id}`); } catch (e) { }
   };
 
   const closeDetail = () => {
     setOpenDetailId(null);
     setDetailData(null);
     setCurrentIndex(-1);
-    try { window.history.pushState(null, '', `/schedule-gd`); } catch (e) {}
+    try { window.history.pushState(null, '', `/schedule-gd`); } catch (e) { }
   };
 
   const goPrevDetail = () => {
@@ -271,13 +271,12 @@ export default function SchedulePage() {
 
       {/* VIEW SELECT */}
       <div className="px-4 pt-4 flex gap-2">
-        {['day','week','month'].map(v => (
+        {['day', 'week', 'month'].map(v => (
           <button
             key={v}
             onClick={() => setView(v as any)}
-            className={`px-4 py-2 rounded-lg text-sm font-semibold ${
-              view === v ? 'bg-white shadow text-sky-600' : 'text-gray-500'
-            }`}
+            className={`px-4 py-2 rounded-lg text-sm font-semibold ${view === v ? 'bg-white shadow text-sky-600' : 'text-gray-500'
+              }`}
           >
             {v === 'day' ? 'Hari' : v === 'week' ? 'Minggu' : 'Bulan'}
           </button>
@@ -321,10 +320,12 @@ export default function SchedulePage() {
                             onClick={() => handleEventClick(e)}
                             role="button"
                             tabIndex={0}
-                            className="text-[11px] px-2 py-1 rounded mb-1 cursor-pointer hover:opacity-80 truncate"
+                            className="px-2 py-1 h-[12px] md:h-auto rounded mb-1 cursor-pointer hover:opacity-80"
                             style={{ backgroundColor: e.color }}
                           >
-                            {e.ulp}
+                            <span className="hidden md:block text-[11px] truncate">
+                              {e.ulp}
+                            </span>
                           </div>
                         ))}
 

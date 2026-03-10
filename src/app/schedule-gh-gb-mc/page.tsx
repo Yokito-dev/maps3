@@ -129,7 +129,7 @@ export default function SchedulePage() {
         const parsed = JSON.parse(cache)
         const data = Array.isArray(parsed) ? parsed : parsed?.data
         if (Array.isArray(data)) applyData(data)
-      } catch {}
+      } catch { }
     }
 
     // 2) fetch terbaru
@@ -294,9 +294,8 @@ export default function SchedulePage() {
           <button
             key={v}
             onClick={() => setView(v)}
-            className={`px-4 py-2 rounded-lg text-sm font-semibold ${
-              view === v ? 'bg-white shadow text-sky-600' : 'text-gray-500'
-            }`}
+            className={`px-4 py-2 rounded-lg text-sm font-semibold ${view === v ? 'bg-white shadow text-sky-600' : 'text-gray-500'
+              }`}
           >
             {v === 'day' ? 'Hari' : v === 'week' ? 'Minggu' : 'Bulan'}
           </button>
@@ -330,12 +329,13 @@ export default function SchedulePage() {
                               <div
                                 key={e.id}
                                 onClick={() => openDetail(e.id)}
-                                className={`text-[11px] px-2 py-1 rounded mb-1 cursor-pointer ${
-                                  openingDetail ? 'opacity-50 pointer-events-none' : 'hover:opacity-90'
-                                }`}
+                                className={`px-2 py-1 h-[14px] md:h-auto rounded mb-1 cursor-pointer ${openingDetail ? 'opacity-50 pointer-events-none' : 'hover:opacity-90'
+                                  }`}
                                 style={{ backgroundColor: e.color }}
                               >
-                                {e.title}
+                                <span className="hidden md:block text-[11px] md:truncate lg:whitespace-normal w-full">
+                                  {e.title}
+                                </span>
                               </div>
                             ))}
 
@@ -376,9 +376,8 @@ export default function SchedulePage() {
                   <div
                     key={e.id}
                     onClick={() => openDetail(e.id)}
-                    className={`p-2 rounded cursor-pointer ${
-                      openingDetail ? 'opacity-50 pointer-events-none' : 'hover:opacity-90'
-                    }`}
+                    className={`p-2 rounded cursor-pointer ${openingDetail ? 'opacity-50 pointer-events-none' : 'hover:opacity-90'
+                      }`}
                     style={{ backgroundColor: e.color }}
                   >
                     {e.title}
@@ -397,9 +396,8 @@ export default function SchedulePage() {
             <div
               key={e.id}
               onClick={() => openDetail(e.id)}
-              className={`p-3 mb-2 rounded cursor-pointer ${
-                openingDetail ? 'opacity-50 pointer-events-none' : 'hover:opacity-90'
-              }`}
+              className={`p-3 mb-2 rounded cursor-pointer ${openingDetail ? 'opacity-50 pointer-events-none' : 'hover:opacity-90'
+                }`}
               style={{ backgroundColor: e.color }}
             >
               {e.title}

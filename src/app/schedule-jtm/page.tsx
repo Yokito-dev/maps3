@@ -108,7 +108,7 @@ export default function ScheduleClient({ initialData }: Props) {
       hasShownAnything = true;
       try {
         localStorage.setItem("schedule_cache", JSON.stringify(initialData));
-      } catch {}
+      } catch { }
     } else {
       // B) fallback ke cache
       const cache = localStorage.getItem("schedule_cache");
@@ -119,7 +119,7 @@ export default function ScheduleClient({ initialData }: Props) {
             applyData(parsed);
             hasShownAnything = true;
           }
-        } catch {}
+        } catch { }
       }
     }
 
@@ -147,7 +147,7 @@ export default function ScheduleClient({ initialData }: Props) {
           applyData(data);
           try {
             localStorage.setItem("schedule_cache", JSON.stringify(data));
-          } catch {}
+          } catch { }
         }
       } catch (e) {
         // kalau gagal, ya udah: tetap tampilkan yang ada (kalender tetap kebuka)
@@ -170,18 +170,18 @@ export default function ScheduleClient({ initialData }: Props) {
   /* ================= UTIL ================= */
   const bulan = useMemo(
     () => [
-      "Januari","Februari","Maret","April","Mei","Juni",
-      "Juli","Agustus","September","Oktober","November","Desember",
+      "Januari", "Februari", "Maret", "April", "Mei", "Juni",
+      "Juli", "Agustus", "September", "Oktober", "November", "Desember",
     ],
     []
   );
 
   const hari = useMemo(
-    () => ["Minggu","Senin","Selasa","Rabu","Kamis","Jumat","Sabtu"],
+    () => ["Minggu", "Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu"],
     []
   );
 
-  const hariGrid = useMemo(() => ["Min","Sen","Sel","Rab","Kam","Jum","Sab"], []);
+  const hariGrid = useMemo(() => ["Min", "Sen", "Sel", "Rab", "Kam", "Jum", "Sab"], []);
 
   const baseDate = selectedDate || currentDate;
 
@@ -295,9 +295,8 @@ export default function ScheduleClient({ initialData }: Props) {
           <button
             key={v}
             onClick={() => setView(v as any)}
-            className={`px-4 py-2 rounded-lg text-sm font-semibold ${
-              view === v ? "bg-white shadow text-sky-600" : "text-gray-500"
-            }`}
+            className={`px-4 py-2 rounded-lg text-sm font-semibold ${view === v ? "bg-white shadow text-sky-600" : "text-gray-500"
+              }`}
           >
             {v === "day" ? "Hari" : v === "week" ? "Minggu" : "Bulan"}
           </button>
@@ -341,10 +340,12 @@ export default function ScheduleClient({ initialData }: Props) {
                               <div
                                 key={e.id}
                                 onClick={() => openDetail(e.id)}
-                                className="text-[11px] px-2 py-1 rounded mb-1 cursor-pointer hover:opacity-80"
+                                className="px-2 py-1 h-[14px] md:h-auto rounded mb-1 cursor-pointer hover:opacity-80"
                                 style={{ backgroundColor: e.color }}
                               >
-                                {e.ulp}
+                                <span className="hidden md:block text-[11px] md:truncate lg:whitespace-normal">
+                                  {e.ulp}
+                                </span>
                               </div>
                             ))}
 
