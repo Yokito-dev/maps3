@@ -333,7 +333,7 @@ export default function SchedulePage() {
                                   }`}
                                 style={{ backgroundColor: e.color }}
                               >
-                                <span className="hidden md:block text-[11px]">
+                                <span className="hidden md:block text-[11px] md:truncate lg:whitespace-normal w-full">
                                   {e.title}
                                 </span>
                               </div>
