@@ -18,16 +18,8 @@ import {
 import plnKecil from '@/app/assets/plnup3/plnkecil.svg'
 import bg from '@/app/assets/plnup3/bgnogradient.png'
 
-/**
- * IMPORTANT:
- * - Pastikan ini adalah URL Apps Script yang punya endpoint `type=pemeliharaan`
- */
 const API_URL =
   'https://script.google.com/macros/s/AKfycbzRDMaCMfNqLKd_wqrQBiHj074VPKruyxW0tJkkd6UL621eoA374IlF9lamc1JX1dBJ/exec'
-
-// Sesuaikan dengan nama folder form kamu (case-sensitive terhadap folder app)
-const ROUTE_FORM = '/PEMELIHARAAN-GT-Form'
-const ROUTE_MENU = '/menu'
 
 type ULPItem = { ulp: string; count: number }
 
@@ -63,6 +55,17 @@ type PemRow = {
 
 type ExecItem = { name: string; count: number }
 type DateItem = { key: string; label: string; count: number; ts: number }
+
+/** Normalize kuat (biar cocok sama backend yang kadang ada spasi/karakter aneh) */
+function normLoose(v: any) {
+  return String(v ?? '')
+    .normalize('NFKC')
+    .replace(/\u00a0/g, ' ') // NBSP
+    .replace(/[\u200b-\u200d\uFEFF]/g, '') // zero width
+    .trim()
+    .replace(/\s+/g, ' ')
+    .toUpperCase()
+}
 
 function mapsLinkFromKoordinat(koor: string) {
   if (!koor) return ''
@@ -120,7 +123,8 @@ function dateKeyAndLabel(raw: string) {
   const mm = pad2(d.getMonth() + 1)
   const dd = pad2(d.getDate())
 
-  // label M/D/YYYY biar mirip screenshot (2/26/2026)
+  // key stabil
+  // label M/D/YYYY (biar mirip screenshot kamu)
   return {
     key: `${yy}-${mm}-${dd}`,
     label: `${d.getMonth() + 1}/${d.getDate()}/${yy}`,
@@ -155,14 +159,17 @@ function ListRow({
   )
 }
 
-/**
- * ✅ FIX: wrapper BUKAN <button> supaya tidak ada nested button.
- */
+/** FIX: wrapper BUKAN <button> supaya tidak nested button */
 function DataRowItem({ r, onOpen }: { r: PemRow; onOpen: () => void }) {
   const thumb = r.fotoSebelum1 || r.fotoProses || r.fotoSesudah1 || r.fotoBA || ''
-  const title = String(r.namaGardu || r.penyulang || '-').trim()
-  const line2 = String(r.pemeliharaanText || '').trim()
-  const line2OneLine = line2 ? line2.replace(/\n+/g, ', ') : '-'
+  const title = (r.namaGardu || r.penyulang || '-').trim()
+
+  const rawLine2 = String(r.pemeliharaanText || '').trim()
+  const line2OneLine = rawLine2 ? rawLine2.replace(/\n+/g, ', ') : ''
+  // biar gak jadi "- - xxx"
+  const cleanLine2 = line2OneLine.replace(/^\s*-\s*/g, '').trim()
+  const displayLine2 = cleanLine2 ? `- ${cleanLine2}` : '-'
+
   const exec = String(r.dieksekusiOleh || '-').trim()
   const gmaps = mapsLinkFromKoordinat(String(r.longlat || ''))
 
@@ -172,12 +179,9 @@ function DataRowItem({ r, onOpen }: { r: PemRow; onOpen: () => void }) {
       tabIndex={0}
       onClick={onOpen}
       onKeyDown={e => {
-        if (e.key === 'Enter' || e.key === ' ') {
-          e.preventDefault()
-          onOpen()
-        }
+        if (e.key === 'Enter' || e.key === ' ') onOpen()
       }}
-      className="w-full border-b px-3 py-3 flex gap-4 text-left hover:bg-gray-50 cursor-pointer"
+      className="w-full border-b px-3 py-3 flex gap-4 text-left hover:bg-gray-50 cursor-pointer outline-none"
     >
       {/* THUMB */}
       <div className="w-[72px] h-[72px] rounded-md overflow-hidden bg-gray-100 flex items-center justify-center shrink-0">
@@ -192,7 +196,7 @@ function DataRowItem({ r, onOpen }: { r: PemRow; onOpen: () => void }) {
       {/* TEXT */}
       <div className="flex-1 min-w-0">
         <div className="font-semibold text-[15px] truncate">{title}</div>
-        <div className="text-[13px] text-gray-700 truncate">- {line2OneLine}</div>
+        <div className="text-[13px] text-gray-700 truncate">{displayLine2}</div>
       </div>
 
       {/* RIGHT */}
@@ -206,7 +210,6 @@ function DataRowItem({ r, onOpen }: { r: PemRow; onOpen: () => void }) {
             title="Edit (coming soon)"
             onClick={e => {
               e.stopPropagation()
-              // TODO: edit handler
             }}
           >
             <IoCreateOutline size={18} />
@@ -224,7 +227,10 @@ function DataRowItem({ r, onOpen }: { r: PemRow; onOpen: () => void }) {
               <IoLocationOutline size={18} />
             </a>
           ) : (
-            <span className="text-gray-300" title="Koordinat kosong">
+            <span
+              className="text-gray-300 cursor-not-allowed"
+              title="Koordinat kosong"
+            >
               <IoLocationOutline size={18} />
             </span>
           )}
@@ -241,7 +247,9 @@ function Field({ label, value }: { label: string; value?: any }) {
       : String(value)
   return (
     <div className="mb-5">
-      <div className="text-[10px] tracking-wide text-gray-500 uppercase">{label}</div>
+      <div className="text-[10px] tracking-wide text-gray-500 uppercase">
+        {label}
+      </div>
       <div className="text-[14px] font-medium text-gray-900">{v}</div>
     </div>
   )
@@ -251,17 +259,17 @@ function PhotoBlock({ label, url }: { label: string; url?: string }) {
   if (!url) return null
   return (
     <div className="mb-6">
-      <div className="text-[10px] tracking-wide text-gray-500 uppercase mb-2">{label}</div>
+      <div className="text-[10px] tracking-wide text-gray-500 uppercase mb-2">
+        {label}
+      </div>
       {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img src={url} alt={label} className="w-[180px] max-w-full rounded-md border bg-white" />
+      <img
+        src={url}
+        alt={label}
+        className="w-[180px] max-w-full rounded-md border bg-white"
+      />
     </div>
   )
-}
-
-function asRows(json: any): PemRow[] {
-  if (Array.isArray(json)) return json
-  if (json && Array.isArray(json.data)) return json.data
-  return []
 }
 
 export default function Page() {
@@ -270,78 +278,116 @@ export default function Page() {
   // 0=ULP, 1=EXEC, 2=DATE, 3=DATA, 4=DETAIL
   const [step, setStep] = useState<0 | 1 | 2 | 3 | 4>(0)
 
+  const [ulpList, setUlpList] = useState<ULPItem[]>([])
   const [selectedUlp, setSelectedUlp] = useState<string>('') // '' = ALL
   const [selectedExec, setSelectedExec] = useState<string>('All')
   const [selectedDateKey, setSelectedDateKey] = useState<string>('All')
 
-  const [allRows, setAllRows] = useState<PemRow[]>([])
+  const [rowsScope, setRowsScope] = useState<PemRow[]>([])
   const [loading, setLoading] = useState(false)
-  const [errMsg, setErrMsg] = useState('')
 
   const [searchOpen, setSearchOpen] = useState(false)
   const [search, setSearch] = useState('')
 
   const [detailIndex, setDetailIndex] = useState(0)
 
-  const fetchAllRows = async () => {
+  const totalAll = useMemo(
+    () => ulpList.reduce((a, b) => a + (b.count || 0), 0),
+    [ulpList]
+  )
+
+  const loadUlpList = async () => {
     setLoading(true)
-    setErrMsg('')
     try {
-      const res = await fetch(`${API_URL}?type=pemeliharaan&_=${Date.now()}`, { cache: 'no-store' })
-      const json = await res.json().catch(() => null)
-      if (!res.ok) throw new Error(`HTTP ${res.status}`)
-      const rows = asRows(json)
-      setAllRows(rows)
-    } catch (e: any) {
-      setAllRows([])
-      setErrMsg(e?.message || 'Gagal mengambil data')
+      const res = await fetch(
+        `${API_URL}?type=pemeliharaan_ulps&_=${Date.now()}`,
+        { cache: 'no-store' }
+      )
+      const json = await res.json().catch(() => [])
+      setUlpList(Array.isArray(json) ? json : [])
+    } catch {
+      setUlpList([])
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  /**
+   * IMPORTANT FIX:
+   * - coba fetch dengan filter ulp
+   * - kalau hasilnya kosong padahal data ada (karena mismatch spasi/case), fallback:
+   *   fetch ALL lalu filter lokal pakai normLoose
+   */
+  const loadRowsForUlp = async (ulp: string) => {
+    setLoading(true)
+    try {
+      const urlFiltered = ulp
+        ? `${API_URL}?type=pemeliharaan&ulp=${encodeURIComponent(
+            ulp
+          )}&_=${Date.now()}`
+        : `${API_URL}?type=pemeliharaan&_=${Date.now()}`
+
+      const res1 = await fetch(urlFiltered, { cache: 'no-store' })
+      const json1 = await res1.json().catch(() => [])
+      const arr1: PemRow[] = Array.isArray(json1) ? json1 : []
+
+      if (!ulp) {
+        setRowsScope(arr1)
+        return
+      }
+
+      // kalau backend filter bener, selesai
+      if (arr1.length > 0) {
+        setRowsScope(arr1)
+        return
+      }
+
+      // fallback: fetch ALL, filter lokal
+      const resAll = await fetch(
+        `${API_URL}?type=pemeliharaan&_=${Date.now()}`,
+        { cache: 'no-store' }
+      )
+      const jsonAll = await resAll.json().catch(() => [])
+      const allRows: PemRow[] = Array.isArray(jsonAll) ? jsonAll : []
+
+      const want = normLoose(ulp)
+      const filteredLocal = allRows.filter(
+        r => normLoose(r.ulp) === want
+      )
+
+      setRowsScope(filteredLocal)
     } finally {
       setLoading(false)
     }
   }
 
   useEffect(() => {
-    fetchAllRows()
+    loadUlpList()
   }, [])
 
-  // ✅ ULP list + count selalu dari data real (bukan endpoint terpisah)
-  const ulpList: ULPItem[] = useMemo(() => {
-    const map = new Map<string, number>()
-    for (const r of allRows) {
-      const u = String(r.ulp || '').trim()
-      if (!u) continue
-      map.set(u, (map.get(u) || 0) + 1)
-    }
-    return Array.from(map.entries())
-      .map(([ulp, count]) => ({ ulp, count }))
-      .sort((a, b) => String(a.ulp).localeCompare(String(b.ulp)))
-  }, [allRows])
-
-  const totalAll = useMemo(() => allRows.length, [allRows])
-
-  const rowsScope = useMemo(() => {
-    if (!selectedUlp) return allRows
-    return allRows.filter(r => String(r.ulp || '').trim() === selectedUlp)
-  }, [allRows, selectedUlp])
-
   const execList: ExecItem[] = useMemo(() => {
-    const map = new Map<string, number>()
+    const map = new Map<string, { label: string; count: number }>()
     for (const r of rowsScope) {
-      const key = String(r.dieksekusiOleh || '').trim()
-      if (!key) continue
-      map.set(key, (map.get(key) || 0) + 1)
+      const raw = String(r.dieksekusiOleh || '').trim()
+      const k = normLoose(raw)
+      const label = raw || '-'
+      if (!k) continue
+      const prev = map.get(k)
+      map.set(k, { label, count: (prev?.count || 0) + 1 })
     }
-    const arr = Array.from(map.entries())
-      .map(([name, count]) => ({ name, count }))
+
+    const arr = Array.from(map.values())
+      .map(x => ({ name: x.label, count: x.count }))
       .sort((a, b) => b.count - a.count)
 
-    const total = arr.reduce((x, y) => x + y.count, 0)
+    const total = rowsScope.length // ✅ TOTAL harus based on rows, bukan arr reduce
     return [{ name: 'All', count: total }, ...arr]
   }, [rowsScope])
 
   const rowsByExec = useMemo(() => {
     if (!selectedExec || selectedExec === 'All') return rowsScope
-    return rowsScope.filter(r => String(r.dieksekusiOleh || '').trim() === selectedExec)
+    const want = normLoose(selectedExec)
+    return rowsScope.filter(r => normLoose(r.dieksekusiOleh) === want)
   }, [rowsScope, selectedExec])
 
   const dateList: DateItem[] = useMemo(() => {
@@ -360,7 +406,7 @@ export default function Page() {
       .map(([key, v]) => ({ key, label: v.label, count: v.count, ts: v.ts }))
       .sort((a, b) => (b.ts || 0) - (a.ts || 0))
 
-    const total = arr.reduce((x, y) => x + y.count, 0)
+    const total = rowsByExec.length
     return [{ key: 'All', label: 'All', count: total, ts: 0 }, ...arr]
   }, [rowsByExec])
 
@@ -376,12 +422,10 @@ export default function Page() {
       })
     }
 
-    // search hanya di step 3
     if (step === 3 && search.trim()) {
       const q = search.trim().toLowerCase()
       out = out.filter(r => {
-        const t =
-          `${r.namaGardu || ''} ${r.penyulang || ''} ${r.pemeliharaanText || ''} ${r.dieksekusiOleh || ''}`.toLowerCase()
+        const t = `${r.namaGardu || ''} ${r.penyulang || ''} ${r.pemeliharaanText || ''} ${r.dieksekusiOleh || ''}`.toLowerCase()
         return t.includes(q)
       })
     }
@@ -427,16 +471,17 @@ export default function Page() {
     if (step === 1) {
       setSelectedExec('All')
       setSelectedDateKey('All')
+      setRowsScope([])
       setSelectedUlp('')
       setStep(0)
       return
     }
-
-    router.push(ROUTE_MENU)
+    router.push('/menu')
   }
 
   const refreshNow = async () => {
-    await fetchAllRows()
+    await loadUlpList()
+    if (step >= 1) await loadRowsForUlp(selectedUlp)
   }
 
   const openDetailAt = (idx: number) => {
@@ -497,14 +542,7 @@ export default function Page() {
         </div>
       )}
 
-      {/* ERROR BAR */}
-      {!!errMsg && (
-        <div className="px-4 py-2 border-b bg-red-50 text-red-700 text-sm">
-          {errMsg}
-        </div>
-      )}
-
-      {/* LIST/DETAIL BODY */}
+      {/* BODY */}
       <main className="flex-1 overflow-hidden">
         {/* DETAIL VIEW */}
         {step === 4 && detailRow ? (
@@ -538,9 +576,15 @@ export default function Page() {
                 </div>
 
                 <Field label="KAPASITAS" value={detailRow.kapasitas} />
-                {detailRow.konstruksi !== undefined && <Field label="KONSTRUKSI" value={detailRow.konstruksi} />}
-                {detailRow.fuselinkMax !== undefined && <Field label="FUSELINK MAX" value={detailRow.fuselinkMax} />}
-                {detailRow.bebanTrMax !== undefined && <Field label="BEBAN TR MAX" value={detailRow.bebanTrMax} />}
+                {detailRow.konstruksi !== undefined && (
+                  <Field label="KONSTRUKSI" value={detailRow.konstruksi} />
+                )}
+                {detailRow.fuselinkMax !== undefined && (
+                  <Field label="FUSELINK MAX" value={detailRow.fuselinkMax} />
+                )}
+                {detailRow.bebanTrMax !== undefined && (
+                  <Field label="BEBAN TR MAX" value={detailRow.bebanTrMax} />
+                )}
 
                 <Field label="FASA" value={detailRow.fasa} />
                 <Field label="PENYULANG" value={detailRow.penyulang} />
@@ -585,7 +629,7 @@ export default function Page() {
 
             <button
               type="button"
-              onClick={() => router.push(ROUTE_FORM)}
+              onClick={() => router.push('/PEMELIHARAAN-GT-Form')}
               className="fixed bottom-6 right-6 w-14 h-14 rounded-full bg-[#2FA6DE] text-white shadow-lg flex items-center justify-center hover:opacity-90 active:scale-95 transition"
               title="Edit / Tambah"
             >
@@ -608,10 +652,11 @@ export default function Page() {
                   <ListRow
                     label="All"
                     count={totalAll}
-                    onClick={() => {
+                    onClick={async () => {
                       setSelectedUlp('')
                       setSelectedExec('All')
                       setSelectedDateKey('All')
+                      await loadRowsForUlp('')
                       setStep(1)
                     }}
                   />
@@ -621,17 +666,20 @@ export default function Page() {
                       key={item.ulp}
                       label={item.ulp}
                       count={item.count}
-                      onClick={() => {
+                      onClick={async () => {
                         setSelectedUlp(item.ulp)
                         setSelectedExec('All')
                         setSelectedDateKey('All')
+                        await loadRowsForUlp(item.ulp)
                         setStep(1)
                       }}
                     />
                   ))}
 
-                  {!loading && totalAll === 0 && (
-                    <div className="text-gray-500 py-6 px-3">Belum ada data pemeliharaan GT.</div>
+                  {!loading && ulpList.length === 0 && (
+                    <div className="text-gray-500 py-6 px-3">
+                      Belum ada data pemeliharaan GT.
+                    </div>
                   )}
                 </div>
               )}
@@ -653,7 +701,9 @@ export default function Page() {
                   ))}
 
                   {!loading && rowsScope.length === 0 && (
-                    <div className="text-gray-500 py-6 px-3">Belum ada data untuk pilihan ini.</div>
+                    <div className="text-gray-500 py-6 px-3">
+                      Belum ada data untuk ULP ini.
+                    </div>
                   )}
                 </div>
               )}
@@ -674,7 +724,9 @@ export default function Page() {
                   ))}
 
                   {!loading && rowsByExec.length === 0 && (
-                    <div className="text-gray-500 py-6 px-3">Belum ada data untuk eksekusi ini.</div>
+                    <div className="text-gray-500 py-6 px-3">
+                      Belum ada data untuk eksekusi ini.
+                    </div>
                   )}
                 </div>
               )}
@@ -683,20 +735,21 @@ export default function Page() {
               {step === 3 && (
                 <div>
                   {rowsFinal.map((r, idx) => (
-                    <DataRowItem key={r.row ?? idx} r={r} onOpen={() => openDetailAt(idx)} />
+                    <DataRowItem key={r.row} r={r} onOpen={() => openDetailAt(idx)} />
                   ))}
 
                   {!loading && rowsFinal.length === 0 && (
-                    <div className="text-gray-500 py-6 px-3">Belum ada data untuk filter ini.</div>
+                    <div className="text-gray-500 py-6 px-3">
+                      Belum ada data untuk filter ini.
+                    </div>
                   )}
                 </div>
               )}
             </div>
 
-            {/* FLOATING + */}
             <button
               type="button"
-              onClick={() => router.push(ROUTE_FORM)}
+              onClick={() => router.push('/PEMELIHARAAN-GT-Form')}
               className="fixed bottom-6 right-6 w-14 h-14 rounded-full bg-[#2FA6DE] text-white shadow-lg flex items-center justify-center hover:opacity-90 active:scale-95 transition"
               title="Tambah Data"
             >
