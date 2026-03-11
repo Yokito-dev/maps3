@@ -57,7 +57,7 @@ export default function Page() {
         { id: 5, title: "Hasil Inspeksi JTM", link: "/HASIL-INSPEKSI-JTM-Form", image: hslinpksijtm },
         { id: 6, title: "Hasil Inspeksi GH GB MC", link: "/HASIL-INSPEKSI-GH-GB-MC-Form", image: hslinpksighgbmc },
         { id: 7, title: "Pemeliharaan GH GB MC", link: "/PEMELIHARAAN-GH-GB-MC-Form", image: pmlihraanghgbmc },
-        { id: 8, title: "Pemeliharaan GT", link: "/pemeliharaan-gt", image: pmlihraangt },
+        { id: 8, title: "Pemeliharaan GT", link: "/PEMELIHARAAN-GT-Form", image: pmlihraangt },
         { id: 9, title: "Pemeliharaan JTM", link: "/pemeliharaan-jtm", image: pmlihraanjtm },
     ];
 

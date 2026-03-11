@@ -6,7 +6,8 @@ import {
   IoChevronForward,
   IoCreateOutline,
   IoLocationOutline,
-  IoAdd,} from 'react-icons/io5'
+  IoAdd,
+} from 'react-icons/io5'
 import { useRouter } from 'next/navigation'
 import plnKecil from '@/app/assets/plnup3/plnkecil.svg'
 import Image from 'next/image'
@@ -165,7 +166,7 @@ function DataRowItem({ r }: { r: PemRow }) {
             type="button"
             className="text-gray-600 hover:text-black"
             title="Edit (coming soon)"
-            onClick={() => {}}
+            onClick={() => { }}
           >
             <IoCreateOutline size={18} />
           </button>
@@ -356,9 +357,9 @@ export default function Page() {
                   }}
                 />
 
-                {ulpList.map(item => (
+                {ulpList.map((item, index) => (
                   <ListRow
-                    key={item.ulp}
+                    key={`${item.ulp}-${index}`}
                     label={item.ulp}
                     count={item.count}
                     onClick={async () => {
@@ -452,6 +453,6 @@ export default function Page() {
         title="Tambah Data">
         <IoAdd size={28} />
       </button>
-    </div> 
-  ) 
+    </div>
+  )
 }
