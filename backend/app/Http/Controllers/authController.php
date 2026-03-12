@@ -17,7 +17,7 @@ class authController extends Controller
             'email'=>'required',
             'password'=>'required',
             'code'=>'required',
-            'role'=>'required|in:inspektor,admin',
+            'role'=>'required|in:supervisor,admin_up3,vendor,admin_ulp',
         ]);
         $user = User::create([
           'username'=>$request->username,
