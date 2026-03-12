@@ -34,29 +34,39 @@ export const AuthProvider = ({ children }) => {
   }, []);
 
   const login = async (form) => {
-    if (!form.username || !form.password) {
-      throw new Error("Username dan password harus diisi.");
+  if (!form.username || !form.password) {
+    throw new Error("Username dan password harus diisi.");
+  }
+
+  try {
+    const res = await axios.post("/login", form);
+
+    localStorage.setItem("auth_token", res.data.access_token);
+    setUser(res.data.user);
+
+    const role = res.data.user.role;
+
+    if (role === "supervisor") {
+      router.push("/menu");
+    } 
+    else if (role === "admin_up3") {
+      router.push("/menu");
+    } 
+    else if (role === "admin_ulp") {
+      router.push("/menu");
+    } 
+    else if (role === "vendor") {
+      router.push("/menu");
+    } 
+    else {
+      router.push("/daftaradmin");
     }
 
-    try {
-      const res = await axios.post("/login", form);
-      localStorage.setItem("auth_token", res.data.access_token);
-      setUser(res.data.user);
-
-      // Routing berdasarkan role
-      // Pastikan folder tujuan (lobby, dashboard, dll) memiliki page.tsx
-      if (res.data.user.role === "inspektor") {
-        router.push("/menu");
-      } else if (res.data.user.role === "admin") {
-        router.push("/menu");
-      } else {
-        router.push("/daftaradmin");
-      }
-    } catch (e) {
-      console.error("Login gagal:", e.response?.data?.message || e.message);
-      throw new Error("Login gagal, periksa kembali username dan password.");
-    }
-  };
+  } catch (e) {
+    console.error("Login gagal:", e.response?.data?.message || e.message);
+    throw new Error("Login gagal, periksa kembali username dan password.");
+  }
+};
 
   const logout = async () => {
     try {
