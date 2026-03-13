@@ -1,10 +1,10 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import "leaflet/dist/leaflet.css";
 import { divIcon, type DivIcon, type Map as LeafletMap } from "leaflet";
-import { useMap } from "react-leaflet";
+import { useMap, useMapEvents } from "react-leaflet";
 
 const MapContainer = dynamic(() => import("react-leaflet").then((m) => m.MapContainer), { ssr: false });
 const TileLayer = dynamic(() => import("react-leaflet").then((m) => m.TileLayer), { ssr: false });
@@ -19,9 +19,6 @@ const BUNDLE_URL =
 const UP3 = "MAKASSAR SELATAN";
 const DEDUP_DECIMALS = 6;
 
-/**
- * EDIT SENDIRI OPSI PENYULANG DI SINI
- */
 const PENYULANG_OPTIONS = [
   "PENYULANG A",
   "PENYULANG B",
@@ -29,6 +26,7 @@ const PENYULANG_OPTIONS = [
 ];
 
 type NodeKategori = "GH" | "LBS" | "REC";
+type RoutePointKind = "pole" | "vertex";
 
 type PolePointRaw = {
   rowId: number;
@@ -91,10 +89,17 @@ type LineEndpoint = {
   longitude: number;
 };
 
-type PoleRoutePoint = {
+type RoutePathPoint = {
   key: string;
   latitude: number;
   longitude: number;
+  kind: RoutePointKind;
+};
+
+type RouteBranch = {
+  id: string;
+  name: string;
+  points: RoutePathPoint[];
 };
 
 type ManualLine = {
@@ -148,9 +153,26 @@ type PoleNeighbor = {
   dist: number;
 };
 
+type ParsedLineNote = {
+  mainRoutePoints: RoutePathPoint[];
+  branches: RouteBranch[];
+};
+
+type RenderedBranchPath = {
+  id: string;
+  name: string;
+  positions: number[][];
+};
+
+type RenderedLinePaths = {
+  main: number[][];
+  branches: RenderedBranchPath[];
+};
+
 const COLOR_TIANG_BASE = { stroke: "#082f6b", fill: "#0b3f93" };
 const COLOR_TIANG_SECTION = { stroke: "#1565c0", fill: "#4f8fe8" };
 const COLOR_TIANG_SELECTED = { stroke: "#ef6c00", fill: "#ffb74d" };
+const COLOR_VERTEX = { stroke: "#7b1fa2", fill: "#ba68c8" };
 
 const COLOR_GH = { stroke: "#1565c0", fill: "#42a5f5" };
 const COLOR_LBS = { stroke: "#111111", fill: "#ef5350" };
@@ -216,13 +238,29 @@ function jsonp<T>(url: string, params: Record<string, string>, timeoutMs = 60000
     });
 
   const p = __jsonpMutex.then(runOnce);
-  __jsonpMutex = p.catch(() => {});
+  __jsonpMutex = p.catch(() => { });
   return p;
 }
 
 function MapSetter({ onReady }: { onReady: (m: LeafletMap) => void }) {
   const map = useMap();
   useEffect(() => onReady(map), [map, onReady]);
+  return null;
+}
+
+function MapClickCapture({
+  enabled,
+  onClickMap,
+}: {
+  enabled: boolean;
+  onClickMap: (lat: number, lng: number) => void;
+}) {
+  useMapEvents({
+    click(e) {
+      if (!enabled) return;
+      onClickMap(e.latlng.lat, e.latlng.lng);
+    },
+  });
   return null;
 }
 
@@ -330,6 +368,35 @@ function emptyDraftLine(): DraftLine {
   };
 }
 
+function makeBranchId() {
+  return `branch_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function makeVertexId() {
+  return `vertex_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function nextBranchName(branches: RouteBranch[]) {
+  const used = new Set(branches.map((b) => String(b.name || "").trim().toUpperCase()));
+  const letters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("");
+
+  for (const ch of letters) {
+    const candidate = `SECTION ${ch}`;
+    if (!used.has(candidate)) return candidate;
+  }
+
+  return `SECTION ${branches.length + 1}`;
+}
+
+function makeVertexPoint(lat: number, lng: number): RoutePathPoint {
+  return {
+    key: makeVertexId(),
+    latitude: lat,
+    longitude: lng,
+    kind: "vertex",
+  };
+}
+
 function haversineMeters(lat1: number, lng1: number, lat2: number, lng2: number) {
   const R = 6371000;
   const dLat = ((lat2 - lat1) * Math.PI) / 180;
@@ -338,9 +405,9 @@ function haversineMeters(lat1: number, lng1: number, lat2: number, lng2: number)
   const a =
     Math.sin(dLat / 2) * Math.sin(dLat / 2) +
     Math.cos((lat1 * Math.PI) / 180) *
-      Math.cos((lat2 * Math.PI) / 180) *
-      Math.sin(dLng / 2) *
-      Math.sin(dLng / 2);
+    Math.cos((lat2 * Math.PI) / 180) *
+    Math.sin(dLng / 2) *
+    Math.sin(dLng / 2);
 
   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
   return R * c;
@@ -494,56 +561,137 @@ function buildPolePolylinePositions(
   return direct;
 }
 
-function buildManualPolePolylinePositions(
+function buildManualRoutePolylinePositions(
   fromLat: number,
   fromLng: number,
   toLat: number,
   toLng: number,
-  poleRoute: PoleRoutePoint[]
+  routePoints: RoutePathPoint[]
 ) {
   const pts: number[][] = [[fromLat, fromLng]];
-  poleRoute.forEach((p) => pts.push([p.latitude, p.longitude]));
+  routePoints.forEach((p) => pts.push([p.latitude, p.longitude]));
   pts.push([toLat, toLng]);
   return dedupeLatLng(pts);
 }
 
-function parseLineNote(note?: string): { poleRoute: PoleRoutePoint[] } {
-  if (!note) return { poleRoute: [] };
+function parseRoutePoints(arr: any[]): RoutePathPoint[] {
+  return arr
+    .map((x: any) => ({
+      key: String(x?.key || coordKey(Number(x?.latitude), Number(x?.longitude))),
+      latitude: Number(x?.latitude),
+      longitude: Number(x?.longitude),
+      kind: x?.kind === "vertex" ? "vertex" : "pole",
+    }))
+    .filter(
+      (x: RoutePathPoint) =>
+        Number.isFinite(x.latitude) && Number.isFinite(x.longitude)
+    );
+}
+
+function parseLineNote(note?: string): ParsedLineNote {
+  if (!note) return { mainRoutePoints: [], branches: [] };
 
   try {
     const obj = JSON.parse(String(note));
-    const arr = Array.isArray(obj?.poleRoute) ? obj.poleRoute : [];
 
-    const poleRoute = arr
-      .map((x: any) => ({
-        key: String(x?.key || coordKey(Number(x?.latitude), Number(x?.longitude))),
-        latitude: Number(x?.latitude),
-        longitude: Number(x?.longitude),
+    const mainArr = Array.isArray(obj?.mainRoutePoints)
+      ? obj.mainRoutePoints
+      : Array.isArray(obj?.mainPoleRoute)
+        ? obj.mainPoleRoute
+        : Array.isArray(obj?.poleRoute)
+          ? obj.poleRoute
+          : [];
+
+    const branchesRaw = Array.isArray(obj?.branches) ? obj.branches : [];
+
+    const mainRoutePoints = parseRoutePoints(mainArr);
+
+    const branches: RouteBranch[] = branchesRaw
+      .map((x: any, idx: number) => ({
+        id: String(x?.id || makeBranchId()),
+        name: String(x?.name || `SECTION ${idx + 1}`).trim() || `SECTION ${idx + 1}`,
+        points: parseRoutePoints(Array.isArray(x?.points) ? x.points : Array.isArray(x?.poles) ? x.poles : []),
       }))
-      .filter(
-        (x: PoleRoutePoint) =>
-          Number.isFinite(x.latitude) && Number.isFinite(x.longitude)
-      );
+      .filter((x: RouteBranch) => x.points.length > 0 || x.name);
 
-    return { poleRoute };
+    return { mainRoutePoints, branches };
   } catch {
-    return { poleRoute: [] };
+    return { mainRoutePoints: [], branches: [] };
   }
 }
 
-function serializeLineNote(poleRoute: PoleRoutePoint[]) {
-  if (!poleRoute.length) return "";
+function serializeLineNote(mainRoutePoints: RoutePathPoint[], branches: RouteBranch[]) {
+  const cleanedBranches = branches
+    .map((b) => ({
+      id: b.id,
+      name: b.name,
+      points: b.points.map((p) => ({
+        key: p.key,
+        latitude: p.latitude,
+        longitude: p.longitude,
+        kind: p.kind,
+      })),
+    }))
+    .filter((b) => b.points.length > 0);
+
+  if (!mainRoutePoints.length && !cleanedBranches.length) return "";
+
   return JSON.stringify({
-    poleRoute: poleRoute.map((p) => ({
+    mainRoutePoints: mainRoutePoints.map((p) => ({
       key: p.key,
       latitude: p.latitude,
       longitude: p.longitude,
+      kind: p.kind,
     })),
+    branches: cleanedBranches,
   });
 }
 
-function getPoleRouteFromLine(line: ManualLine | null | undefined) {
-  return parseLineNote(line?.note).poleRoute;
+function getMainRoutePointsFromLine(line: ManualLine | null | undefined) {
+  return parseLineNote(line?.note).mainRoutePoints;
+}
+
+function getBranchesFromLine(line: ManualLine | null | undefined) {
+  return parseLineNote(line?.note).branches;
+}
+
+function nearestPointOnPath(path: number[][], lat: number, lng: number) {
+  if (!path.length) return [lat, lng];
+
+  let best = path[0];
+  let bestDist = Number.POSITIVE_INFINITY;
+
+  for (const p of path) {
+    const d = haversineMeters(lat, lng, p[0], p[1]);
+    if (d < bestDist) {
+      bestDist = d;
+      best = p;
+    }
+  }
+
+  return best;
+}
+
+function buildBranchPolylinePositions(
+  routePoints: RoutePathPoint[],
+  anchorPath: number[][]
+) {
+  if (!routePoints.length) return [];
+
+  const raw = routePoints.map((p) => [p.latitude, p.longitude]);
+  const anchor = anchorPath.length
+    ? nearestPointOnPath(anchorPath, routePoints[0].latitude, routePoints[0].longitude)
+    : raw[0];
+
+  return dedupeLatLng([[anchor[0], anchor[1]], ...raw]);
+}
+
+function countRoutePoints(points: RoutePathPoint[]) {
+  return points.length;
+}
+
+function countAllRoutePoints(mainPoints: RoutePathPoint[], branches: RouteBranch[]) {
+  return mainPoints.length + branches.reduce((acc, b) => acc + b.points.length, 0);
 }
 
 function pointToSegmentDistanceMeters(
@@ -813,8 +961,14 @@ export default function MapsPage() {
   const [editorMsg, setEditorMsg] = useState("");
   const [draftLine, setDraftLine] = useState<DraftLine | null>(null);
 
-  const [draftPoleRoute, setDraftPoleRoute] = useState<PoleRoutePoint[]>([]);
-  const [lineEditPoleRoute, setLineEditPoleRoute] = useState<PoleRoutePoint[]>([]);
+  const [draftPoleRoute, setDraftPoleRoute] = useState<RoutePathPoint[]>([]);
+  const [lineEditPoleRoute, setLineEditPoleRoute] = useState<RoutePathPoint[]>([]);
+
+  const [draftBranches, setDraftBranches] = useState<RouteBranch[]>([]);
+  const [lineEditBranches, setLineEditBranches] = useState<RouteBranch[]>([]);
+
+  const [activeRouteKey, setActiveRouteKey] = useState<string>("main");
+  const [activeInputMode, setActiveInputMode] = useState<"pole" | "vertex">("pole");
 
   const boundsRef = useRef<any>(null);
   const [boundsVersion, setBoundsVersion] = useState(0);
@@ -824,13 +978,13 @@ export default function MapsPage() {
   const iconREC = useMemo(() => makeRecIcon(28), []);
 
   const poleCanvasRadius = useMemo(() => {
-    const r = 2.25 - (currentZoom - 10) * 0.1;
-    return Math.max(1, Math.min(2.25, r));
+    const r = 1.65 + (currentZoom - 10) * 0.26;
+    return Math.max(1.5, Math.min(4.1, r));
   }, [currentZoom]);
 
   const nodeCanvasRadius = useMemo(() => {
-    const r = 3.2 - (currentZoom - 10) * 0.18;
-    return Math.max(1.8, Math.min(3.2, r));
+    const r = 2 + (currentZoom - 10) * 0.16;
+    return Math.max(1.8, Math.min(3.4, r));
   }, [currentZoom]);
 
   useEffect(() => setMounted(true), []);
@@ -1004,12 +1158,16 @@ export default function MapsPage() {
     if (!selectedLineId) {
       setLineEditDraft(null);
       setLineEditPoleRoute([]);
+      setLineEditBranches([]);
+      setActiveRouteKey("main");
       return;
     }
 
     const found = manualLines.find((x) => x.id === selectedLineId) || null;
     setLineEditDraft(found ? { ...found } : null);
-    setLineEditPoleRoute(getPoleRouteFromLine(found));
+    setLineEditPoleRoute(getMainRoutePointsFromLine(found));
+    setLineEditBranches(getBranchesFromLine(found));
+    setActiveRouteKey("main");
 
     const inferredUlp = found?.ulp || found?.fromUlp || found?.toUlp || "";
     if (found && inferredUlp && inferredUlp !== selectedUlp) {
@@ -1092,18 +1250,8 @@ export default function MapsPage() {
   }, [poleGroups, viewportOnly, boundsVersion]);
 
   const manualLinesDisplayed = useMemo(() => {
-    let list = manualLines;
-    const b = viewportOnly ? boundsRef.current : null;
-
-    if (b) {
-      list = list.filter(
-        (l) =>
-          b.contains([l.fromLat, l.fromLng] as any) ||
-          b.contains([l.toLat, l.toLng] as any)
-      );
-    }
-    return list;
-  }, [manualLines, viewportOnly, boundsVersion]);
+    return manualLines;
+  }, [manualLines]);
 
   const activeLineEndpoints = useMemo(() => {
     if (selectedLineId && lineEditDraft) {
@@ -1127,21 +1275,48 @@ export default function MapsPage() {
     return null;
   }, [selectedLineId, lineEditDraft, draftLine]);
 
-  const activePoleRoute = useMemo(
-    () => (selectedLineId ? lineEditPoleRoute : draftPoleRoute),
-    [selectedLineId, lineEditPoleRoute, draftPoleRoute]
+  const currentBranches = useMemo(
+    () => (selectedLineId ? lineEditBranches : draftBranches),
+    [selectedLineId, lineEditBranches, draftBranches]
   );
 
+  useEffect(() => {
+    if (activeRouteKey === "main") return;
+    if (!currentBranches.some((b) => b.id === activeRouteKey)) {
+      setActiveRouteKey("main");
+    }
+  }, [activeRouteKey, currentBranches]);
+
+  const activeRouteLabel = useMemo(() => {
+    if (activeRouteKey === "main") return "MAIN";
+    return currentBranches.find((b) => b.id === activeRouteKey)?.name || "SECTION";
+  }, [activeRouteKey, currentBranches]);
+
+  const activeEditableRoutePoints = useMemo(() => {
+    if (activeRouteKey === "main") {
+      return selectedLineId ? lineEditPoleRoute : draftPoleRoute;
+    }
+    return currentBranches.find((b) => b.id === activeRouteKey)?.points || [];
+  }, [activeRouteKey, selectedLineId, lineEditPoleRoute, draftPoleRoute, currentBranches]);
+
+  const allActivePolePoints = useMemo(() => {
+    const main = (selectedLineId ? lineEditPoleRoute : draftPoleRoute).filter((p) => p.kind === "pole");
+    const branches = currentBranches.flatMap((b) => b.points.filter((p) => p.kind === "pole"));
+    return [...main, ...branches];
+  }, [selectedLineId, lineEditPoleRoute, draftPoleRoute, currentBranches]);
+
   const activePoleRouteKeySet = useMemo(
-    () => new Set(activePoleRoute.map((x) => x.key)),
-    [activePoleRoute]
+    () => new Set(allActivePolePoints.map((x) => x.key)),
+    [allActivePolePoints]
   );
 
   const activePoleRouteIndexMap = useMemo(() => {
     const m = new Map<string, number>();
-    activePoleRoute.forEach((p, i) => m.set(p.key, i + 1));
+    activeEditableRoutePoints
+      .filter((p) => p.kind === "pole")
+      .forEach((p, i) => m.set(p.key, i + 1));
     return m;
-  }, [activePoleRoute]);
+  }, [activeEditableRoutePoints]);
 
   const routingPoleGroups = useMemo(() => {
     if (!activeLineEndpoints) return [];
@@ -1195,31 +1370,12 @@ export default function MapsPage() {
     );
   }, [activeLineEndpoints, routingPoleGroups, routingPoleNeighborMap]);
 
-  const sectionPoleCandidatesAll = useMemo(() => {
-    if (!activeLineEndpoints) return [];
-    if (!poleGroups.length) return [];
-
-    const basePath =
-      activeAutoSectionPath ||
-      [
-        [activeLineEndpoints.fromLat, activeLineEndpoints.fromLng],
-        [activeLineEndpoints.toLat, activeLineEndpoints.toLng],
-      ];
-
-    return filterPolesBySectionPath(poleGroups, basePath);
-  }, [activeLineEndpoints, poleGroups, activeAutoSectionPath]);
-
-  const sectionPoleKeySet = useMemo(
-    () => new Set(sectionPoleCandidatesAll.map((p) => p.key)),
-    [sectionPoleCandidatesAll]
-  );
-
   const draftLinePath = useMemo(() => {
     if (selectedLineId) return null;
     if (!draftLine?.from || !draftLine?.to) return null;
 
     if (draftPoleRoute.length) {
-      return buildManualPolePolylinePositions(
+      return buildManualRoutePolylinePositions(
         draftLine.from.latitude,
         draftLine.from.longitude,
         draftLine.to.latitude,
@@ -1238,48 +1394,123 @@ export default function MapsPage() {
     );
   }, [selectedLineId, draftLine, draftPoleRoute, routingPoleGroups, routingPoleNeighborMap]);
 
+  const activeMainBasePath = useMemo(() => {
+    if (selectedLineId && lineEditDraft) {
+      if (lineEditPoleRoute.length) {
+        return buildManualRoutePolylinePositions(
+          lineEditDraft.fromLat,
+          lineEditDraft.fromLng,
+          lineEditDraft.toLat,
+          lineEditDraft.toLng,
+          lineEditPoleRoute
+        );
+      }
+
+      return (
+        activeAutoSectionPath || [
+          [lineEditDraft.fromLat, lineEditDraft.fromLng],
+          [lineEditDraft.toLat, lineEditDraft.toLng],
+        ]
+      );
+    }
+
+    if (!selectedLineId && draftLine?.from && draftLine?.to) {
+      return (
+        draftLinePath || [
+          [draftLine.from.latitude, draftLine.from.longitude],
+          [draftLine.to.latitude, draftLine.to.longitude],
+        ]
+      );
+    }
+
+    return [];
+  }, [selectedLineId, lineEditDraft, lineEditPoleRoute, activeAutoSectionPath, draftLine, draftLinePath]);
+
+  const activeCurrentRoutePath = useMemo(() => {
+    if (!activeLineEndpoints) return [];
+
+    if (activeRouteKey === "main") {
+      return activeMainBasePath;
+    }
+
+    return buildBranchPolylinePositions(activeEditableRoutePoints, activeMainBasePath);
+  }, [activeLineEndpoints, activeRouteKey, activeEditableRoutePoints, activeMainBasePath]);
+
+  const sectionPoleCandidatesAll = useMemo(() => {
+    if (!poleGroups.length) return [];
+    if (!activeCurrentRoutePath.length) return [];
+    return filterPolesBySectionPath(poleGroups, activeCurrentRoutePath);
+  }, [poleGroups, activeCurrentRoutePath]);
+
+  const sectionPoleKeySet = useMemo(
+    () => new Set(sectionPoleCandidatesAll.map((p) => p.key)),
+    [sectionPoleCandidatesAll]
+  );
+
+  const draftBranchPathList = useMemo<RenderedBranchPath[]>(() => {
+    if (selectedLineId) return [];
+
+    return draftBranches
+      .map((b) => ({
+        id: b.id,
+        name: b.name,
+        positions: buildBranchPolylinePositions(b.points, activeMainBasePath),
+      }))
+      .filter((b) => b.positions.length >= 2);
+  }, [selectedLineId, draftBranches, activeMainBasePath]);
+
   const manualLinePathMap = useMemo(() => {
-    const m = new Map<string, number[][]>();
+    const m = new Map<string, RenderedLinePaths>();
 
     for (const l of manualLinesDisplayed) {
-      const routePoints =
+      const mainRoutePoints =
         selectedLineId === l.id && lineEditDraft
           ? lineEditPoleRoute
-          : getPoleRouteFromLine(l);
+          : getMainRoutePointsFromLine(l);
 
-      if (routePoints.length) {
-        m.set(
-          l.id,
-          buildManualPolePolylinePositions(
-            l.fromLat,
-            l.fromLng,
-            l.toLat,
-            l.toLng,
-            routePoints
-          )
+      const branchPoints =
+        selectedLineId === l.id && lineEditDraft
+          ? lineEditBranches
+          : getBranchesFromLine(l);
+
+      let mainPositions: number[][];
+
+      if (mainRoutePoints.length) {
+        mainPositions = buildManualRoutePolylinePositions(
+          l.fromLat,
+          l.fromLng,
+          l.toLat,
+          l.toLng,
+          mainRoutePoints
         );
-        continue;
+      } else if (selectedLineId === l.id && activeLineEndpoints) {
+        mainPositions = buildPolePolylinePositions(
+          l.fromLat,
+          l.fromLng,
+          l.toLat,
+          l.toLng,
+          routingPoleGroups,
+          routingPoleNeighborMap
+        );
+      } else {
+        mainPositions = [
+          [l.fromLat, l.fromLng],
+          [l.toLat, l.toLng],
+        ];
       }
 
-      if (selectedLineId === l.id && activeLineEndpoints) {
-        m.set(
-          l.id,
-          buildPolePolylinePositions(
-            l.fromLat,
-            l.fromLng,
-            l.toLat,
-            l.toLng,
-            routingPoleGroups,
-            routingPoleNeighborMap
-          )
-        );
-        continue;
-      }
+      const branchPaths: RenderedBranchPath[] = branchPoints
+        .map((b) => ({
+          id: b.id,
+          name: b.name,
+          positions: buildBranchPolylinePositions(b.points, mainPositions),
+        }))
+        .filter((b) => b.positions.length >= 2);
 
-      m.set(l.id, [
-        [l.fromLat, l.fromLng],
-        [l.toLat, l.toLng],
-      ]);
+      m.set(l.id, {
+        main: mainPositions,
+        branches: branchPaths,
+      });
     }
 
     return m;
@@ -1288,6 +1519,7 @@ export default function MapsPage() {
     selectedLineId,
     lineEditDraft,
     lineEditPoleRoute,
+    lineEditBranches,
     activeLineEndpoints,
     routingPoleGroups,
     routingPoleNeighborMap,
@@ -1329,6 +1561,45 @@ export default function MapsPage() {
     return out;
   }, [nodesRaw]);
 
+  const penyulangOptions = useMemo(() => {
+    const s = new Set<string>();
+
+    PENYULANG_OPTIONS.forEach((x) => {
+      const v = String(x || "").trim();
+      if (v) s.add(v);
+    });
+
+    manualLines.forEach((x) => {
+      const v = String(x?.penyulang || "").trim();
+      if (v) s.add(v);
+    });
+
+    const editVal = String(lineEditDraft?.penyulang || "").trim();
+    if (editVal) s.add(editVal);
+
+    const draftVal = String(draftLine?.penyulang || "").trim();
+    if (draftVal) s.add(draftVal);
+
+    return Array.from(s);
+  }, [manualLines, lineEditDraft?.penyulang, draftLine?.penyulang]);
+
+  const currentPenyulangValue = useMemo(() => {
+    if (selectedLineId && lineEditDraft) return lineEditDraft.penyulang || "";
+    return draftLine?.penyulang || "";
+  }, [selectedLineId, lineEditDraft, draftLine]);
+
+  const handlePanelPenyulangChange = useCallback((value: string) => {
+    if (selectedLineId) {
+      setLineEditDraft((prev) => (prev ? { ...prev, penyulang: value } : prev));
+      return;
+    }
+
+    setDraftLine((prev) => ({
+      ...(prev || emptyDraftLine()),
+      penyulang: value,
+    }));
+  }, [selectedLineId]);
+
   const colorByKategori = useCallback((k: NodeKategori) => {
     if (k === "GH") return COLOR_GH;
     if (k === "LBS") return COLOR_LBS;
@@ -1344,6 +1615,159 @@ export default function MapsPage() {
     [iconGH, iconLBS, iconREC]
   );
 
+  const addNewBranch = useCallback(() => {
+    if (!editMode) return;
+
+    const factory = (prev: RouteBranch[]) => {
+      const name = nextBranchName(prev);
+      const next: RouteBranch[] = [...prev, { id: makeBranchId(), name, points: [] }];
+      const justAdded = next[next.length - 1];
+      setActiveRouteKey(justAdded.id);
+      setActiveInputMode("pole");
+      setEditorMsg(`${name} ditambahkan. Klik tiang untuk cabang, atau ganti mode ke BELOKAN untuk bikin tikungan.`);
+      return next;
+    };
+
+    if (selectedLineId) {
+      setLineEditBranches(factory);
+    } else {
+      setDraftBranches(factory);
+    }
+  }, [editMode, selectedLineId]);
+
+  const removeActiveBranch = useCallback(() => {
+    if (activeRouteKey === "main") return;
+    const target = currentBranches.find((b) => b.id === activeRouteKey);
+    if (!target) return;
+    if (!window.confirm(`Hapus ${target.name}?`)) return;
+
+    if (selectedLineId) {
+      setLineEditBranches((prev) => prev.filter((b) => b.id !== activeRouteKey));
+    } else {
+      setDraftBranches((prev) => prev.filter((b) => b.id !== activeRouteKey));
+    }
+
+    setActiveRouteKey("main");
+    setEditorMsg(`${target.name} dihapus.`);
+  }, [activeRouteKey, currentBranches, selectedLineId]);
+
+  const undoLastPointInActiveRoute = useCallback(() => {
+    if (activeRouteKey === "main") {
+      if (selectedLineId) {
+        setLineEditPoleRoute((prev) => prev.slice(0, -1));
+      } else {
+        setDraftPoleRoute((prev) => prev.slice(0, -1));
+      }
+    } else {
+      if (selectedLineId) {
+        setLineEditBranches((prev) =>
+          prev.map((b) =>
+            b.id === activeRouteKey ? { ...b, points: b.points.slice(0, -1) } : b
+          )
+        );
+      } else {
+        setDraftBranches((prev) =>
+          prev.map((b) =>
+            b.id === activeRouteKey ? { ...b, points: b.points.slice(0, -1) } : b
+          )
+        );
+      }
+    }
+
+    setEditorMsg(`Titik terakhir dihapus dari jalur ${activeRouteLabel}.`);
+  }, [activeRouteKey, activeRouteLabel, selectedLineId]);
+
+  const resetActiveRoutePoints = useCallback(() => {
+    if (activeRouteKey === "main") {
+      if (selectedLineId) {
+        setLineEditPoleRoute([]);
+      } else {
+        setDraftPoleRoute([]);
+      }
+    } else {
+      if (selectedLineId) {
+        setLineEditBranches((prev) =>
+          prev.map((b) =>
+            b.id === activeRouteKey ? { ...b, points: [] } : b
+          )
+        );
+      } else {
+        setDraftBranches((prev) =>
+          prev.map((b) =>
+            b.id === activeRouteKey ? { ...b, points: [] } : b
+          )
+        );
+      }
+    }
+
+    setEditorMsg(`Semua titik di jalur ${activeRouteLabel} di-reset.`);
+  }, [activeRouteKey, activeRouteLabel, selectedLineId]);
+
+  const removePointFromActiveRoute = useCallback(
+    (pointKey: string) => {
+      if (activeRouteKey === "main") {
+        if (selectedLineId) {
+          setLineEditPoleRoute((prev) => prev.filter((x) => x.key !== pointKey));
+        } else {
+          setDraftPoleRoute((prev) => prev.filter((x) => x.key !== pointKey));
+        }
+      } else {
+        if (selectedLineId) {
+          setLineEditBranches((prev) =>
+            prev.map((b) =>
+              b.id === activeRouteKey
+                ? { ...b, points: b.points.filter((x) => x.key !== pointKey) }
+                : b
+            )
+          );
+        } else {
+          setDraftBranches((prev) =>
+            prev.map((b) =>
+              b.id === activeRouteKey
+                ? { ...b, points: b.points.filter((x) => x.key !== pointKey) }
+                : b
+            )
+          );
+        }
+      }
+
+      setEditorMsg(`Titik dilepas dari jalur ${activeRouteLabel}.`);
+    },
+    [activeRouteKey, activeRouteLabel, selectedLineId]
+  );
+
+  const handleAddVertexToActiveRoute = useCallback(
+    (lat: number, lng: number) => {
+      if (!editMode || pickMode || !activeLineEndpoints) return;
+      const vertex = makeVertexPoint(lat, lng);
+
+      if (activeRouteKey === "main") {
+        if (selectedLineId) {
+          setLineEditPoleRoute((prev) => [...prev, vertex]);
+        } else {
+          setDraftPoleRoute((prev) => [...prev, vertex]);
+        }
+      } else {
+        if (selectedLineId) {
+          setLineEditBranches((prev) =>
+            prev.map((b) =>
+              b.id === activeRouteKey ? { ...b, points: [...b.points, vertex] } : b
+            )
+          );
+        } else {
+          setDraftBranches((prev) =>
+            prev.map((b) =>
+              b.id === activeRouteKey ? { ...b, points: [...b.points, vertex] } : b
+            )
+          );
+        }
+      }
+
+      setEditorMsg(`Belokan ditambahkan ke jalur ${activeRouteLabel}.`);
+    },
+    [editMode, pickMode, activeLineEndpoints, activeRouteKey, activeRouteLabel, selectedLineId]
+  );
+
   const handleNodePickedForEditor = useCallback(
     (group: NodeGroup) => {
       if (!editMode) return;
@@ -1352,6 +1776,9 @@ export default function MapsPage() {
 
       if (!selectedLineId && (pickMode === null || pickMode === "draft_from")) {
         setDraftPoleRoute([]);
+        setDraftBranches([]);
+        setActiveRouteKey("main");
+        setActiveInputMode("pole");
         if (endpoint.ulp) setSelectedUlp(endpoint.ulp);
         setDraftLine((prev) => ({
           ...(prev || emptyDraftLine()),
@@ -1374,8 +1801,11 @@ export default function MapsPage() {
         });
         if (endpoint.ulp) setSelectedUlp(endpoint.ulp);
         setDraftPoleRoute([]);
+        setDraftBranches([]);
+        setActiveRouteKey("main");
+        setActiveInputMode("pole");
         setPickMode(null);
-        setEditorMsg("Titik akhir dipilih. Sekarang klik beberapa tiang.");
+        setEditorMsg("Titik akhir dipilih. Sekarang pilih TIANG atau mode BELOKAN.");
         return;
       }
 
@@ -1399,6 +1829,9 @@ export default function MapsPage() {
         });
         if (endpoint.ulp) setSelectedUlp(endpoint.ulp);
         setLineEditPoleRoute([]);
+        setLineEditBranches([]);
+        setActiveRouteKey("main");
+        setActiveInputMode("pole");
         setPickMode(null);
         setEditorMsg("Titik awal diganti.");
         return;
@@ -1424,6 +1857,9 @@ export default function MapsPage() {
         });
         if (endpoint.ulp) setSelectedUlp(endpoint.ulp);
         setLineEditPoleRoute([]);
+        setLineEditBranches([]);
+        setActiveRouteKey("main");
+        setActiveInputMode("pole");
         setPickMode(null);
         setEditorMsg("Titik akhir diganti.");
       }
@@ -1445,37 +1881,48 @@ export default function MapsPage() {
 
   const togglePoleInCurrentRoute = useCallback(
     (pole: PoleGroup) => {
-      const point: PoleRoutePoint = {
+      const point: RoutePathPoint = {
         key: pole.key,
         latitude: pole.latitude,
         longitude: pole.longitude,
+        kind: "pole",
       };
 
+      const toggleArr = (prev: RoutePathPoint[]) => {
+        const exists = prev.some((x) => x.key === pole.key);
+        const next = exists ? prev.filter((x) => x.key !== pole.key) : [...prev, point];
+        setEditorMsg(
+          exists
+            ? `Tiang dilepas dari jalur ${activeRouteLabel}. Total titik: ${next.length}`
+            : `Tiang ditambahkan ke jalur ${activeRouteLabel}. Total titik: ${next.length}`
+        );
+        return next;
+      };
+
+      if (activeRouteKey === "main") {
+        if (selectedLineId) {
+          setLineEditPoleRoute(toggleArr);
+        } else {
+          setDraftPoleRoute(toggleArr);
+        }
+        return;
+      }
+
       if (selectedLineId) {
-        setLineEditPoleRoute((prev) => {
-          const exists = prev.some((x) => x.key === pole.key);
-          const next = exists ? prev.filter((x) => x.key !== pole.key) : [...prev, point];
-          setEditorMsg(
-            exists
-              ? `Tiang dilepas dari jalur. Total tiang manual: ${next.length}`
-              : `Tiang ditambahkan. Total tiang manual: ${next.length}`
-          );
-          return next;
-        });
+        setLineEditBranches((prev) =>
+          prev.map((b) =>
+            b.id === activeRouteKey ? { ...b, points: toggleArr(b.points) } : b
+          )
+        );
       } else {
-        setDraftPoleRoute((prev) => {
-          const exists = prev.some((x) => x.key === pole.key);
-          const next = exists ? prev.filter((x) => x.key !== pole.key) : [...prev, point];
-          setEditorMsg(
-            exists
-              ? `Tiang dilepas dari draft. Total tiang manual: ${next.length}`
-              : `Tiang ditambahkan. Total tiang manual: ${next.length}`
-          );
-          return next;
-        });
+        setDraftBranches((prev) =>
+          prev.map((b) =>
+            b.id === activeRouteKey ? { ...b, points: toggleArr(b.points) } : b
+          )
+        );
       }
     },
-    [selectedLineId]
+    [activeRouteKey, activeRouteLabel, selectedLineId]
   );
 
   const handlePoleClick = useCallback(
@@ -1486,7 +1933,8 @@ export default function MapsPage() {
         editMode &&
         !pickMode &&
         !!activeLineEndpoints &&
-        !shouldAggregatePoles;
+        !shouldAggregatePoles &&
+        activeInputMode === "pole";
 
       if (canPickPole) {
         togglePoleInCurrentRoute(pole);
@@ -1495,7 +1943,7 @@ export default function MapsPage() {
 
       focusTo(pole.latitude, pole.longitude);
     },
-    [editMode, pickMode, activeLineEndpoints, togglePoleInCurrentRoute, focusTo, shouldAggregatePoles]
+    [editMode, pickMode, activeLineEndpoints, togglePoleInCurrentRoute, focusTo, shouldAggregatePoles, activeInputMode]
   );
 
   const handleToggleEditMode = () => {
@@ -1506,16 +1954,24 @@ export default function MapsPage() {
       setSelectedLineId(null);
       setLineEditDraft(null);
       setLineEditPoleRoute([]);
+      setLineEditBranches([]);
       setDraftLine(emptyDraftLine());
       setDraftPoleRoute([]);
+      setDraftBranches([]);
+      setActiveRouteKey("main");
+      setActiveInputMode("pole");
       setPickMode("draft_from");
-      setEditorMsg("Mode edit aktif. Pilih ULP, pilih node awal-akhir, lalu pilih penyulang dan tiang.");
+      setEditorMsg("Mode edit aktif. Pilih node awal-akhir. Setelah itu pilih mode TIANG atau BELOKAN.");
     } else {
       setSelectedLineId(null);
       setLineEditDraft(null);
       setLineEditPoleRoute([]);
+      setLineEditBranches([]);
       setDraftLine(null);
       setDraftPoleRoute([]);
+      setDraftBranches([]);
+      setActiveRouteKey("main");
+      setActiveInputMode("pole");
       setPickMode(null);
       setEditorMsg("");
     }
@@ -1543,7 +1999,7 @@ export default function MapsPage() {
         penyulang: draftLine.penyulang || "",
         pertemuan: buildLineName(draftLine.from, draftLine.to),
         kms: draftLine.kms || "",
-        note: serializeLineNote(draftPoleRoute),
+        note: serializeLineNote(draftPoleRoute, draftBranches),
 
         fromName: draftLine.from.keypoint,
         fromKategori: draftLine.from.kategori,
@@ -1568,10 +2024,14 @@ export default function MapsPage() {
       setSelectedLineId(resp.line.id);
       setLineEditDraft(resp.line);
       setLineEditPoleRoute(draftPoleRoute);
+      setLineEditBranches(draftBranches);
       setDraftLine(null);
       setDraftPoleRoute([]);
+      setDraftBranches([]);
+      setActiveRouteKey("main");
+      setActiveInputMode("pole");
       setPickMode(null);
-      setEditorMsg(`Data berhasil disimpan. Tiang manual: ${draftPoleRoute.length}`);
+      setEditorMsg(`Data berhasil disimpan. Total titik manual: ${countAllRoutePoints(draftPoleRoute, draftBranches)}`);
     } catch (e: any) {
       setEditorMsg("Gagal simpan data: " + String(e?.message || e));
     } finally {
@@ -1594,7 +2054,7 @@ export default function MapsPage() {
         penyulang: lineEditDraft.penyulang || "",
         pertemuan: lineEditDraft.pertemuan || `${lineEditDraft.fromName} - ${lineEditDraft.toName}`,
         kms: lineEditDraft.kms || "",
-        note: serializeLineNote(lineEditPoleRoute),
+        note: serializeLineNote(lineEditPoleRoute, lineEditBranches),
 
         fromName: lineEditDraft.fromName,
         fromKategori: lineEditDraft.fromKategori,
@@ -1617,7 +2077,7 @@ export default function MapsPage() {
       if (nextUlp) setSelectedUlp(nextUlp);
 
       setLineEditDraft(resp.line);
-      setEditorMsg(`Perubahan berhasil disimpan. Tiang manual: ${lineEditPoleRoute.length}`);
+      setEditorMsg(`Perubahan berhasil disimpan. Total titik manual: ${countAllRoutePoints(lineEditPoleRoute, lineEditBranches)}`);
     } catch (e: any) {
       setEditorMsg("Gagal update data: " + String(e?.message || e));
     } finally {
@@ -1638,8 +2098,12 @@ export default function MapsPage() {
       setSelectedLineId(null);
       setLineEditDraft(null);
       setLineEditPoleRoute([]);
+      setLineEditBranches([]);
       setDraftLine(emptyDraftLine());
       setDraftPoleRoute([]);
+      setDraftBranches([]);
+      setActiveRouteKey("main");
+      setActiveInputMode("pole");
       setPickMode("draft_from");
       setEditorMsg("Data berhasil dihapus.");
     } catch (e: any) {
@@ -1659,7 +2123,22 @@ export default function MapsPage() {
       ? sectionPoleKeySet.has(selectedPoint.data.key)
       : false;
 
+  const selectedPointIsInAnyRoute =
+    selectedPoint?.kind === "pole"
+      ? activePoleRouteKeySet.has(selectedPoint.data.key)
+      : false;
+
   const nodesUseCanvas = nodeGroupsDisplayed.length > 1500;
+
+  const currentMainPointCount = selectedLineId ? countRoutePoints(lineEditPoleRoute) : countRoutePoints(draftPoleRoute);
+  const currentTotalPointCount = selectedLineId
+    ? countAllRoutePoints(lineEditPoleRoute, lineEditBranches)
+    : countAllRoutePoints(draftPoleRoute, draftBranches);
+
+  const activeVertexPoints = useMemo(
+    () => activeEditableRoutePoints.filter((p) => p.kind === "vertex"),
+    [activeEditableRoutePoints]
+  );
 
   if (!mounted) return null;
 
@@ -1708,11 +2187,14 @@ export default function MapsPage() {
                 Section Highlight: <b>{selectedPointIsSectionCandidate ? "YA" : "TIDAK"}</b>
               </div>
               <div style={{ marginTop: 4 }}>
-                Masuk Jalur: <b>{selectedPointPoleRouteIndex >= 0 ? "YA" : "TIDAK"}</b>
+                Masuk Jalur: <b>{selectedPointIsInAnyRoute ? "YA" : "TIDAK"}</b>
+              </div>
+              <div style={{ marginTop: 4 }}>
+                Jalur Aktif: <b>{activeRouteLabel}</b>
               </div>
               {selectedPointPoleRouteIndex >= 0 ? (
                 <div style={{ marginTop: 4 }}>
-                  Urutan Klik: <b>{selectedPointPoleRouteIndex}</b>
+                  Urutan Tiang ({activeRouteLabel}): <b>{selectedPointPoleRouteIndex}</b>
                 </div>
               ) : null}
             </div>
@@ -1805,6 +2287,34 @@ export default function MapsPage() {
           </div>
 
           <div style={{ marginTop: 10, paddingTop: 10, borderTop: "1px solid #eee" }}>
+            <div style={{ fontWeight: 800 }}>Penyulang Aktif</div>
+
+            <select
+              value={currentPenyulangValue}
+              onChange={(e) => handlePanelPenyulangChange(e.target.value)}
+              style={{
+                width: "100%",
+                padding: 8,
+                marginTop: 8,
+                border: "1px solid #ddd",
+                borderRadius: 8,
+                background: "white",
+              }}
+            >
+              <option value="">-- pilih penyulang --</option>
+              {penyulangOptions.map((item) => (
+                <option key={item} value={item}>
+                  {item}
+                </option>
+              ))}
+            </select>
+
+            <div style={{ marginTop: 6, color: "#666" }}>
+              Nilai penyulang di kotak kanan ini akan ikut tersimpan ke data garis.
+            </div>
+          </div>
+
+          <div style={{ marginTop: 10, paddingTop: 10, borderTop: "1px solid #eee" }}>
             <div style={{ fontWeight: 800 }}>Search GH / LBS / REC</div>
             <input
               value={nodeSearch}
@@ -1865,14 +2375,41 @@ export default function MapsPage() {
               Tiang section highlight: <b>{sectionPoleCandidatesAll.length}</b>
             </div>
             <div style={{ marginTop: 4, color: "#666" }}>
-              Zoom jauh = diringkas/grid. Zoom dekat = muncul satu-satu.
+              Zoom out kecil, zoom in membesar secukupnya.
             </div>
             {shouldAggregatePoles ? (
               <div style={{ marginTop: 4, color: "#ef6c00", fontWeight: 700 }}>
-                Tiang sedang diringkas. Zoom in untuk lihat / pilih tiang satu-satu.
+                Tiang sedang diringkas. Zoom in untuk pilih satu-satu.
               </div>
             ) : null}
           </div>
+
+          {selectedLineId && lineEditDraft ? (
+            <div style={{ marginTop: 10, paddingTop: 10, borderTop: "1px solid #eee" }}>
+              <div style={{ fontWeight: 800 }}>Garis Terpilih</div>
+              <div style={{ marginTop: 6, color: "#444" }}>
+                Nama: <b>{lineEditDraft.pertemuan || `${lineEditDraft.fromName} - ${lineEditDraft.toName}`}</b>
+              </div>
+              <div style={{ marginTop: 4, color: "#444" }}>
+                Penyulang: <b>{lineEditDraft.penyulang || "-"}</b>
+              </div>
+              <div style={{ marginTop: 4, color: "#444" }}>
+                KMS: <b>{lineEditDraft.kms || "-"}</b>
+              </div>
+              <div style={{ marginTop: 4, color: "#444" }}>
+                ULP: <b>{lineEditDraft.ulp || lineEditDraft.fromUlp || lineEditDraft.toUlp || "-"}</b>
+              </div>
+              <div style={{ marginTop: 4, color: "#444" }}>
+                MAIN: <b>{lineEditPoleRoute.length}</b> titik
+              </div>
+              <div style={{ marginTop: 4, color: "#444" }}>
+                Cabang: <b>{lineEditBranches.length}</b> jalur
+              </div>
+              <div style={{ marginTop: 4, color: "#444" }}>
+                Total titik manual: <b>{countAllRoutePoints(lineEditPoleRoute, lineEditBranches)}</b>
+              </div>
+            </div>
+          ) : null}
 
           <div style={{ marginTop: 10, color: "#444" }}>
             Zoom: <b>{currentZoom}</b> • viewportOnly: <b>{viewportOnly ? "ON" : "OFF"}</b>
@@ -1890,7 +2427,7 @@ export default function MapsPage() {
           <div style={{ marginTop: 10, paddingTop: 10, borderTop: "1px solid #eee" }}>
             <label style={{ display: "flex", gap: 8, alignItems: "center" }}>
               <input type="checkbox" checked={viewportOnly} onChange={(e) => setViewportOnly(e.target.checked)} />
-              <span>Render hanya yang terlihat</span>
+              <span>Render hanya yang terlihat (garis tetap tampil semua)</span>
             </label>
           </div>
 
@@ -1913,10 +2450,10 @@ export default function MapsPage() {
             background: "white",
             padding: 12,
             borderRadius: 12,
-            width: 460,
+            width: 490,
             boxShadow: "0px 6px 20px rgba(0,0,0,0.22)",
             fontSize: 12,
-            maxHeight: "46vh",
+            maxHeight: "52vh",
             overflowY: "auto",
           }}
         >
@@ -1927,7 +2464,7 @@ export default function MapsPage() {
               {pickMode === "draft_to" && "Pilih titik akhir"}
               {pickMode === "edit_from" && "Ganti titik awal"}
               {pickMode === "edit_to" && "Ganti titik akhir"}
-              {!pickMode && (selectedLineId ? "Edit data + pilih tiang" : "Tambah data + pilih tiang")}
+              {!pickMode && (selectedLineId ? `Edit ${activeRouteLabel}` : `Tambah ${activeRouteLabel}`)}
             </div>
           </div>
 
@@ -1967,6 +2504,9 @@ export default function MapsPage() {
                   onClick={() => {
                     setDraftLine(emptyDraftLine());
                     setDraftPoleRoute([]);
+                    setDraftBranches([]);
+                    setActiveRouteKey("main");
+                    setActiveInputMode("pole");
                     setPickMode("draft_from");
                     setEditorMsg("Klik node untuk pilih titik awal.");
                   }}
@@ -2004,7 +2544,7 @@ export default function MapsPage() {
                   style={{ width: "100%", padding: 8, border: "1px solid #ddd", borderRadius: 8 }}
                 >
                   <option value="">-- pilih penyulang --</option>
-                  {PENYULANG_OPTIONS.map((item) => (
+                  {penyulangOptions.map((item) => (
                     <option key={item} value={item}>
                       {item}
                     </option>
@@ -2013,41 +2553,136 @@ export default function MapsPage() {
               </div>
 
               <div style={{ marginTop: 12, paddingTop: 10, borderTop: "1px solid #eee" }}>
-                <div style={{ fontWeight: 800 }}>Tiang Penghubung Manual ({draftPoleRoute.length})</div>
+                <div style={{ fontWeight: 800 }}>Jalur Manual / Belokan / Percabangan</div>
                 <div style={{ marginTop: 4, color: "#666" }}>
-                  Pilih ULP dulu. Setelah itu klik beberapa tiang untuk masuk ke jalur.
+                  TIANG = klik tiang. BELOKAN = klik area map untuk bikin titik sudut. MAIN = jalur utama. SECTION = cabang.
+                </div>
+
+                <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+                  <select
+                    value={activeRouteKey}
+                    onChange={(e) => setActiveRouteKey(e.target.value)}
+                    style={{ flex: 1, padding: 8, border: "1px solid #ddd", borderRadius: 8 }}
+                  >
+                    <option value="main">MAIN</option>
+                    {draftBranches.map((b) => (
+                      <option key={b.id} value={b.id}>
+                        {b.name}
+                      </option>
+                    ))}
+                  </select>
+
+                  <button
+                    onClick={addNewBranch}
+                    disabled={lineBusy || !draftLine?.from || !draftLine?.to}
+                    style={{ padding: "8px 10px", border: "1px solid #ddd", borderRadius: 8, background: "white", cursor: "pointer" }}
+                  >
+                    + Section
+                  </button>
+
+                  <button
+                    onClick={removeActiveBranch}
+                    disabled={lineBusy || activeRouteKey === "main"}
+                    style={{ padding: "8px 10px", border: "1px solid #ddd", borderRadius: 8, background: "white", cursor: "pointer" }}
+                  >
+                    Hapus
+                  </button>
                 </div>
 
                 <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
                   <button
-                    onClick={() => {
-                      setDraftPoleRoute((prev) => prev.slice(0, -1));
-                      setEditorMsg("Tiang terakhir dihapus dari draft.");
+                    onClick={() => setActiveInputMode("pole")}
+                    style={{
+                      flex: 1,
+                      padding: "8px 10px",
+                      border: activeInputMode === "pole" ? "1px solid #64b5f6" : "1px solid #ddd",
+                      borderRadius: 8,
+                      background: activeInputMode === "pole" ? "#f3f9ff" : "white",
+                      cursor: "pointer",
+                      fontWeight: 700,
                     }}
-                    disabled={lineBusy || draftPoleRoute.length === 0}
-                    style={{ padding: "7px 10px", border: "1px solid #ddd", borderRadius: 8, background: "white", cursor: "pointer" }}
                   >
-                    Undo Tiang Terakhir
+                    Mode TIANG
                   </button>
                   <button
-                    onClick={() => {
-                      setDraftPoleRoute([]);
-                      setEditorMsg("Semua tiang draft di-reset.");
+                    onClick={() => setActiveInputMode("vertex")}
+                    style={{
+                      flex: 1,
+                      padding: "8px 10px",
+                      border: activeInputMode === "vertex" ? "1px solid #ab47bc" : "1px solid #ddd",
+                      borderRadius: 8,
+                      background: activeInputMode === "vertex" ? "#faf2fd" : "white",
+                      cursor: "pointer",
+                      fontWeight: 700,
                     }}
-                    disabled={lineBusy || draftPoleRoute.length === 0}
-                    style={{ padding: "7px 10px", border: "1px solid #ddd", borderRadius: 8, background: "white", cursor: "pointer" }}
                   >
-                    Reset Tiang
+                    Mode BELOKAN
                   </button>
                 </div>
 
-                <div style={{ marginTop: 8, display: "flex", flexDirection: "column", gap: 6, maxHeight: 110, overflowY: "auto" }}>
-                  {draftPoleRoute.length === 0 ? (
-                    <div style={{ color: "#777" }}>Belum ada tiang manual dipilih.</div>
+                <div style={{ marginTop: 8, display: "flex", flexDirection: "column", gap: 6 }}>
+                  <button
+                    onClick={() => setActiveRouteKey("main")}
+                    style={{
+                      textAlign: "left",
+                      padding: "8px 10px",
+                      border: activeRouteKey === "main" ? "1px solid #64b5f6" : "1px solid #eee",
+                      borderRadius: 8,
+                      background: activeRouteKey === "main" ? "#f3f9ff" : "white",
+                      cursor: "pointer",
+                    }}
+                  >
+                    <div style={{ fontWeight: 700 }}>MAIN</div>
+                    <div style={{ color: "#666", marginTop: 2 }}>{draftPoleRoute.length} titik</div>
+                  </button>
+
+                  {draftBranches.map((b) => (
+                    <button
+                      key={b.id}
+                      onClick={() => setActiveRouteKey(b.id)}
+                      style={{
+                        textAlign: "left",
+                        padding: "8px 10px",
+                        border: activeRouteKey === b.id ? "1px solid #64b5f6" : "1px solid #eee",
+                        borderRadius: 8,
+                        background: activeRouteKey === b.id ? "#f3f9ff" : "white",
+                        cursor: "pointer",
+                      }}
+                    >
+                      <div style={{ fontWeight: 700 }}>{b.name}</div>
+                      <div style={{ color: "#666", marginTop: 2 }}>{b.points.length} titik</div>
+                    </button>
+                  ))}
+                </div>
+
+                <div style={{ marginTop: 8, color: "#444" }}>
+                  Jalur aktif: <b>{activeRouteLabel}</b> • Mode input: <b>{activeInputMode === "pole" ? "TIANG" : "BELOKAN"}</b> • Total semua titik: <b>{currentTotalPointCount}</b>
+                </div>
+
+                <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+                  <button
+                    onClick={undoLastPointInActiveRoute}
+                    disabled={lineBusy || activeEditableRoutePoints.length === 0}
+                    style={{ padding: "7px 10px", border: "1px solid #ddd", borderRadius: 8, background: "white", cursor: "pointer" }}
+                  >
+                    Undo Titik
+                  </button>
+                  <button
+                    onClick={resetActiveRoutePoints}
+                    disabled={lineBusy || activeEditableRoutePoints.length === 0}
+                    style={{ padding: "7px 10px", border: "1px solid #ddd", borderRadius: 8, background: "white", cursor: "pointer" }}
+                  >
+                    Reset Jalur Aktif
+                  </button>
+                </div>
+
+                <div style={{ marginTop: 8, display: "flex", flexDirection: "column", gap: 6, maxHeight: 130, overflowY: "auto" }}>
+                  {activeEditableRoutePoints.length === 0 ? (
+                    <div style={{ color: "#777" }}>Belum ada titik di jalur {activeRouteLabel}.</div>
                   ) : (
-                    draftPoleRoute.map((p, idx) => (
+                    activeEditableRoutePoints.map((p, idx) => (
                       <div
-                        key={`draft-pole-${p.key}`}
+                        key={`${activeRouteLabel}-${p.key}`}
                         style={{
                           display: "flex",
                           justifyContent: "space-between",
@@ -2058,11 +2693,13 @@ export default function MapsPage() {
                         }}
                       >
                         <div>
-                          <div style={{ fontWeight: 700 }}>Tiang #{idx + 1}</div>
+                          <div style={{ fontWeight: 700 }}>
+                            {activeRouteLabel} • {p.kind === "pole" ? "Tiang" : "Belokan"} #{idx + 1}
+                          </div>
                           <div style={{ color: "#666", marginTop: 2 }}>{fmtCoord(p.latitude, p.longitude)}</div>
                         </div>
                         <button
-                          onClick={() => setDraftPoleRoute((prev) => prev.filter((x) => x.key !== p.key))}
+                          onClick={() => removePointFromActiveRoute(p.key)}
                           style={{ padding: "6px 8px", border: "1px solid #ddd", borderRadius: 8, background: "white", cursor: "pointer" }}
                         >
                           Lepas
@@ -2150,7 +2787,7 @@ export default function MapsPage() {
                   style={{ width: "100%", padding: 8, border: "1px solid #ddd", borderRadius: 8 }}
                 >
                   <option value="">-- pilih penyulang --</option>
-                  {PENYULANG_OPTIONS.map((item) => (
+                  {penyulangOptions.map((item) => (
                     <option key={item} value={item}>
                       {item}
                     </option>
@@ -2159,41 +2796,136 @@ export default function MapsPage() {
               </div>
 
               <div style={{ marginTop: 12, paddingTop: 10, borderTop: "1px solid #eee" }}>
-                <div style={{ fontWeight: 800 }}>Tiang Penghubung Manual ({lineEditPoleRoute.length})</div>
+                <div style={{ fontWeight: 800 }}>Jalur Manual / Belokan / Percabangan</div>
                 <div style={{ marginTop: 4, color: "#666" }}>
-                  Pilih ULP aktif dulu. Lalu klik beberapa tiang untuk tambah / lepas dari jalur.
+                  Klik tiang kalau mode TIANG. Klik area map kalau mode BELOKAN.
+                </div>
+
+                <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+                  <select
+                    value={activeRouteKey}
+                    onChange={(e) => setActiveRouteKey(e.target.value)}
+                    style={{ flex: 1, padding: 8, border: "1px solid #ddd", borderRadius: 8 }}
+                  >
+                    <option value="main">MAIN</option>
+                    {lineEditBranches.map((b) => (
+                      <option key={b.id} value={b.id}>
+                        {b.name}
+                      </option>
+                    ))}
+                  </select>
+
+                  <button
+                    onClick={addNewBranch}
+                    disabled={lineBusy}
+                    style={{ padding: "8px 10px", border: "1px solid #ddd", borderRadius: 8, background: "white", cursor: "pointer" }}
+                  >
+                    + Section
+                  </button>
+
+                  <button
+                    onClick={removeActiveBranch}
+                    disabled={lineBusy || activeRouteKey === "main"}
+                    style={{ padding: "8px 10px", border: "1px solid #ddd", borderRadius: 8, background: "white", cursor: "pointer" }}
+                  >
+                    Hapus
+                  </button>
                 </div>
 
                 <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
                   <button
-                    onClick={() => {
-                      setLineEditPoleRoute((prev) => prev.slice(0, -1));
-                      setEditorMsg("Tiang terakhir dihapus dari garis edit.");
+                    onClick={() => setActiveInputMode("pole")}
+                    style={{
+                      flex: 1,
+                      padding: "8px 10px",
+                      border: activeInputMode === "pole" ? "1px solid #64b5f6" : "1px solid #ddd",
+                      borderRadius: 8,
+                      background: activeInputMode === "pole" ? "#f3f9ff" : "white",
+                      cursor: "pointer",
+                      fontWeight: 700,
                     }}
-                    disabled={lineBusy || lineEditPoleRoute.length === 0}
-                    style={{ padding: "7px 10px", border: "1px solid #ddd", borderRadius: 8, background: "white", cursor: "pointer" }}
                   >
-                    Undo Tiang Terakhir
+                    Mode TIANG
                   </button>
                   <button
-                    onClick={() => {
-                      setLineEditPoleRoute([]);
-                      setEditorMsg("Semua tiang manual di-reset.");
+                    onClick={() => setActiveInputMode("vertex")}
+                    style={{
+                      flex: 1,
+                      padding: "8px 10px",
+                      border: activeInputMode === "vertex" ? "1px solid #ab47bc" : "1px solid #ddd",
+                      borderRadius: 8,
+                      background: activeInputMode === "vertex" ? "#faf2fd" : "white",
+                      cursor: "pointer",
+                      fontWeight: 700,
                     }}
-                    disabled={lineBusy || lineEditPoleRoute.length === 0}
-                    style={{ padding: "7px 10px", border: "1px solid #ddd", borderRadius: 8, background: "white", cursor: "pointer" }}
                   >
-                    Reset Tiang
+                    Mode BELOKAN
                   </button>
                 </div>
 
-                <div style={{ marginTop: 8, display: "flex", flexDirection: "column", gap: 6, maxHeight: 110, overflowY: "auto" }}>
-                  {lineEditPoleRoute.length === 0 ? (
-                    <div style={{ color: "#777" }}>Belum ada tiang manual dipilih.</div>
+                <div style={{ marginTop: 8, display: "flex", flexDirection: "column", gap: 6 }}>
+                  <button
+                    onClick={() => setActiveRouteKey("main")}
+                    style={{
+                      textAlign: "left",
+                      padding: "8px 10px",
+                      border: activeRouteKey === "main" ? "1px solid #64b5f6" : "1px solid #eee",
+                      borderRadius: 8,
+                      background: activeRouteKey === "main" ? "#f3f9ff" : "white",
+                      cursor: "pointer",
+                    }}
+                  >
+                    <div style={{ fontWeight: 700 }}>MAIN</div>
+                    <div style={{ color: "#666", marginTop: 2 }}>{lineEditPoleRoute.length} titik</div>
+                  </button>
+
+                  {lineEditBranches.map((b) => (
+                    <button
+                      key={b.id}
+                      onClick={() => setActiveRouteKey(b.id)}
+                      style={{
+                        textAlign: "left",
+                        padding: "8px 10px",
+                        border: activeRouteKey === b.id ? "1px solid #64b5f6" : "1px solid #eee",
+                        borderRadius: 8,
+                        background: activeRouteKey === b.id ? "#f3f9ff" : "white",
+                        cursor: "pointer",
+                      }}
+                    >
+                      <div style={{ fontWeight: 700 }}>{b.name}</div>
+                      <div style={{ color: "#666", marginTop: 2 }}>{b.points.length} titik</div>
+                    </button>
+                  ))}
+                </div>
+
+                <div style={{ marginTop: 8, color: "#444" }}>
+                  Jalur aktif: <b>{activeRouteLabel}</b> • Mode input: <b>{activeInputMode === "pole" ? "TIANG" : "BELOKAN"}</b> • Total semua titik: <b>{currentTotalPointCount}</b>
+                </div>
+
+                <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+                  <button
+                    onClick={undoLastPointInActiveRoute}
+                    disabled={lineBusy || activeEditableRoutePoints.length === 0}
+                    style={{ padding: "7px 10px", border: "1px solid #ddd", borderRadius: 8, background: "white", cursor: "pointer" }}
+                  >
+                    Undo Titik
+                  </button>
+                  <button
+                    onClick={resetActiveRoutePoints}
+                    disabled={lineBusy || activeEditableRoutePoints.length === 0}
+                    style={{ padding: "7px 10px", border: "1px solid #ddd", borderRadius: 8, background: "white", cursor: "pointer" }}
+                  >
+                    Reset Jalur Aktif
+                  </button>
+                </div>
+
+                <div style={{ marginTop: 8, display: "flex", flexDirection: "column", gap: 6, maxHeight: 130, overflowY: "auto" }}>
+                  {activeEditableRoutePoints.length === 0 ? (
+                    <div style={{ color: "#777" }}>Belum ada titik di jalur {activeRouteLabel}.</div>
                   ) : (
-                    lineEditPoleRoute.map((p, idx) => (
+                    activeEditableRoutePoints.map((p, idx) => (
                       <div
-                        key={`edit-pole-${p.key}`}
+                        key={`${activeRouteLabel}-${p.key}`}
                         style={{
                           display: "flex",
                           justifyContent: "space-between",
@@ -2204,11 +2936,13 @@ export default function MapsPage() {
                         }}
                       >
                         <div>
-                          <div style={{ fontWeight: 700 }}>Tiang #{idx + 1}</div>
+                          <div style={{ fontWeight: 700 }}>
+                            {activeRouteLabel} • {p.kind === "pole" ? "Tiang" : "Belokan"} #{idx + 1}
+                          </div>
                           <div style={{ color: "#666", marginTop: 2 }}>{fmtCoord(p.latitude, p.longitude)}</div>
                         </div>
                         <button
-                          onClick={() => setLineEditPoleRoute((prev) => prev.filter((x) => x.key !== p.key))}
+                          onClick={() => removePointFromActiveRoute(p.key)}
                           style={{ padding: "6px 8px", border: "1px solid #ddd", borderRadius: 8, background: "white", cursor: "pointer" }}
                         >
                           Lepas
@@ -2267,8 +3001,12 @@ export default function MapsPage() {
                   setSelectedLineId(null);
                   setLineEditDraft(null);
                   setLineEditPoleRoute([]);
+                  setLineEditBranches([]);
                   setDraftLine(emptyDraftLine());
                   setDraftPoleRoute([]);
+                  setDraftBranches([]);
+                  setActiveRouteKey("main");
+                  setActiveInputMode("pole");
                   setPickMode("draft_from");
                 }}
                 disabled={lineBusy}
@@ -2296,7 +3034,10 @@ export default function MapsPage() {
               <div style={{ color: "#777" }}>Belum ada data tersimpan.</div>
             ) : (
               manualLines.map((line) => {
-                const savedPoleCount = getPoleRouteFromLine(line).length;
+                const savedMain = getMainRoutePointsFromLine(line);
+                const savedBranches = getBranchesFromLine(line);
+                const savedTotal = countAllRoutePoints(savedMain, savedBranches);
+
                 return (
                   <button
                     key={line.id}
@@ -2306,6 +3047,9 @@ export default function MapsPage() {
                       setSelectedLineId(line.id);
                       setDraftLine(null);
                       setDraftPoleRoute([]);
+                      setDraftBranches([]);
+                      setActiveRouteKey("main");
+                      setActiveInputMode("pole");
                       setPickMode(null);
                       setEditorMsg("Data dipilih.");
                       fitLine(line);
@@ -2321,7 +3065,10 @@ export default function MapsPage() {
                   >
                     <div style={{ fontWeight: 700 }}>{line.pertemuan || `${line.fromName} - ${line.toName}`}</div>
                     <div style={{ color: "#666", marginTop: 2 }}>
-                      Penyulang: {line.penyulang || "-"} • KMS: {line.kms || "-"} • Tiang manual: {savedPoleCount}
+                      Penyulang: {line.penyulang || "-"} • KMS: {line.kms || "-"}
+                    </div>
+                    <div style={{ color: "#666", marginTop: 2 }}>
+                      MAIN: {savedMain.length} • Cabang: {savedBranches.length} • Total titik: {savedTotal}
                     </div>
                   </button>
                 );
@@ -2340,6 +3087,10 @@ export default function MapsPage() {
         attributionControl={!ssMode}
       >
         <MapSetter onReady={setMap} />
+        <MapClickCapture
+          enabled={editMode && !pickMode && !!activeLineEndpoints && activeInputMode === "vertex" && !ssMode}
+          onClickMap={handleAddVertexToActiveRoute}
+        />
 
         {selectedBase === "normal" ? (
           <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" maxZoom={19} />
@@ -2352,188 +3103,277 @@ export default function MapsPage() {
             positions={draftLinePath as any}
             pathOptions={{
               color: COLOR_DRAFT_LINE,
-              weight: 4,
+              weight: 4.6,
               opacity: 0.95,
               dashArray: draftPoleRoute.length ? undefined : "8 8",
             }}
           />
         )}
 
+        {draftBranchPathList.map((b) => (
+          <Polyline
+            key={`draft-branch-${b.id}`}
+            positions={b.positions as any}
+            pathOptions={{
+              color: COLOR_DRAFT_LINE,
+              weight: 3.9,
+              opacity: 0.92,
+            }}
+          >
+            {!ssMode && (
+              <Tooltip sticky direction="top" opacity={1}>
+                <div style={{ fontSize: 12 }}>
+                  <div style={{ fontWeight: 700 }}>{b.name}</div>
+                  <div style={{ color: "#666", marginTop: 4 }}>
+                    Titik: {draftBranches.find((x) => x.id === b.id)?.points.length || 0}
+                  </div>
+                </div>
+              </Tooltip>
+            )}
+          </Polyline>
+        ))}
+
         {manualLinesDisplayed.map((l) => {
           const isSelected = selectedLineId === l.id;
-          const manualPoleCount = isSelected ? lineEditPoleRoute.length : getPoleRouteFromLine(l).length;
+          const bundle = manualLinePathMap.get(l.id) || {
+            main: [
+              [l.fromLat, l.fromLng],
+              [l.toLat, l.toLng],
+            ],
+            branches: [],
+          };
+
+          const currentMain = isSelected ? lineEditPoleRoute : getMainRoutePointsFromLine(l);
+          const currentBranchesForLine = isSelected ? lineEditBranches : getBranchesFromLine(l);
+          const manualPointCount = countAllRoutePoints(currentMain, currentBranchesForLine);
+
+          const commonEvent = {
+            click: () => {
+              const nextUlp = l.ulp || l.fromUlp || l.toUlp || "";
+              if (nextUlp) setSelectedUlp(nextUlp);
+              setSelectedLineId(l.id);
+              setDraftLine(null);
+              setDraftPoleRoute([]);
+              setDraftBranches([]);
+              setActiveRouteKey("main");
+              setActiveInputMode("pole");
+              setPickMode(null);
+              setEditorMsg("Garis dipilih.");
+            },
+          };
 
           return (
-            <Polyline
-              key={l.id}
-              positions={
-                (manualLinePathMap.get(l.id) || [
-                  [l.fromLat, l.fromLng],
-                  [l.toLat, l.toLng],
-                ]) as any
-              }
-              pathOptions={{
-                color: isSelected ? COLOR_SELECTED_LINE : COLOR_MANUAL_LINE,
-                weight: isSelected ? 5 : 3,
-                opacity: 0.92,
-              }}
-              eventHandlers={{
-                click: () => {
-                  const nextUlp = l.ulp || l.fromUlp || l.toUlp || "";
-                  if (nextUlp) setSelectedUlp(nextUlp);
-                  setSelectedLineId(l.id);
-                  setDraftLine(null);
-                  setDraftPoleRoute([]);
-                  setPickMode(null);
-                  setEditorMsg("Garis dipilih.");
-                },
-              }}
-            >
-              {!ssMode && (
-                <Tooltip sticky direction="top" opacity={1}>
-                  <div style={{ fontSize: 12, minWidth: 220 }}>
-                    <div style={{ fontWeight: 700 }}>{l.pertemuan || `${l.fromName} - ${l.toName}`}</div>
-                    <div style={{ color: "#666", marginTop: 4 }}>Penyulang: {l.penyulang || "-"}</div>
-                    <div style={{ color: "#666" }}>KMS: {l.kms || "-"}</div>
-                    <div style={{ color: "#666" }}>Tiang manual: {manualPoleCount}</div>
-                    <div style={{ color: "#666" }}>ULP Source: {l.ulp || l.fromUlp || l.toUlp || "-"}</div>
-                  </div>
-                </Tooltip>
-              )}
-            </Polyline>
-          );
-        })}
-
-        {nodesUseCanvas
-          ? nodeGroupsDisplayed.map((n) => {
-              const color = colorByKategori(n.kategori);
-              return (
-                <CircleMarker
-                  key={`nC-${n.key}`}
-                  center={[n.latitude, n.longitude]}
-                  radius={nodeCanvasRadius}
-                  pathOptions={{
-                    color: color.stroke,
-                    weight: 1.35,
-                    fillColor: color.fill,
-                    fillOpacity: 0.95,
-                  }}
-                  eventHandlers={{ click: () => handleNodeClick(n) }}
-                />
-              );
-            })
-          : nodeGroupsDisplayed.map((n) => (
-              <Marker
-                key={n.key}
-                position={[n.latitude, n.longitude]}
-                icon={iconByKategori(n.kategori)}
-                eventHandlers={{ click: () => handleNodeClick(n) }}
+            <Fragment key={l.id}>
+              <Polyline
+                positions={bundle.main as any}
+                pathOptions={{
+                  color: isSelected ? COLOR_SELECTED_LINE : COLOR_MANUAL_LINE,
+                  weight: isSelected ? 5.3 : 3.5,
+                  opacity: 0.92,
+                }}
+                eventHandlers={commonEvent}
               >
                 {!ssMode && (
                   <Tooltip sticky direction="top" opacity={1}>
-                    <div style={{ fontSize: 12 }}>
-                      <div style={{ fontWeight: 700 }}>{n.kategori}</div>
-                      <div style={{ color: "#666", marginTop: 4 }}>{fmtCoord(n.latitude, n.longitude)}</div>
-                      <div style={{ marginTop: 4 }}>{n.items[0]?.keypoint || "-"}</div>
+                    <div style={{ fontSize: 12, minWidth: 220 }}>
+                      <div style={{ fontWeight: 700 }}>{l.pertemuan || `${l.fromName} - ${l.toName}`}</div>
+                      <div style={{ color: "#666", marginTop: 4 }}>Penyulang: {l.penyulang || "-"}</div>
+                      <div style={{ color: "#666" }}>KMS: {l.kms || "-"}</div>
+                      <div style={{ color: "#666" }}>Total titik manual: {manualPointCount}</div>
+                      <div style={{ color: "#666" }}>ULP Source: {l.ulp || l.fromUlp || l.toUlp || "-"}</div>
                     </div>
                   </Tooltip>
                 )}
-              </Marker>
-            ))}
+              </Polyline>
+
+              {bundle.branches.map((br) => (
+                <Polyline
+                  key={`${l.id}-${br.id}`}
+                  positions={br.positions as any}
+                  pathOptions={{
+                    color: isSelected ? COLOR_SELECTED_LINE : COLOR_MANUAL_LINE,
+                    weight: isSelected ? 4.2 : 2.9,
+                    opacity: 0.9,
+                  }}
+                  eventHandlers={commonEvent}
+                >
+                  {!ssMode && (
+                    <Tooltip sticky direction="top" opacity={1}>
+                      <div style={{ fontSize: 12, minWidth: 180 }}>
+                        <div style={{ fontWeight: 700 }}>{br.name}</div>
+                        <div style={{ color: "#666", marginTop: 4 }}>
+                          Titik: {currentBranchesForLine.find((x) => x.id === br.id)?.points.length || 0}
+                        </div>
+                      </div>
+                    </Tooltip>
+                  )}
+                </Polyline>
+              ))}
+            </Fragment>
+          );
+        })}
+
+        {activeVertexPoints.map((p, idx) => (
+          <CircleMarker
+            key={`vertex-${p.key}`}
+            center={[p.latitude, p.longitude]}
+            radius={Math.max(3.5, poleCanvasRadius * 0.95)}
+            pathOptions={{
+              color: COLOR_VERTEX.stroke,
+              weight: 2,
+              fillColor: COLOR_VERTEX.fill,
+              fillOpacity: 0.95,
+            }}
+          >
+            {!ssMode && (
+              <Tooltip sticky direction="top" opacity={1}>
+                <div style={{ fontSize: 12 }}>
+                  <div style={{ fontWeight: 700 }}>
+                    BELOKAN #{idx + 1} • {activeRouteLabel}
+                  </div>
+                  <div style={{ color: "#666", marginTop: 4 }}>{fmtCoord(p.latitude, p.longitude)}</div>
+                </div>
+              </Tooltip>
+            )}
+          </CircleMarker>
+        ))}
+
+        {nodesUseCanvas
+          ? nodeGroupsDisplayed.map((n) => {
+            const color = colorByKategori(n.kategori);
+            return (
+              <CircleMarker
+                key={`nC-${n.key}`}
+                center={[n.latitude, n.longitude]}
+                radius={nodeCanvasRadius}
+                pathOptions={{
+                  color: color.stroke,
+                  weight: 1.35,
+                  fillColor: color.fill,
+                  fillOpacity: 0.95,
+                }}
+                eventHandlers={{ click: () => handleNodeClick(n) }}
+              />
+            );
+          })
+          : nodeGroupsDisplayed.map((n) => (
+            <Marker
+              key={n.key}
+              position={[n.latitude, n.longitude]}
+              icon={iconByKategori(n.kategori)}
+              eventHandlers={{ click: () => handleNodeClick(n) }}
+            >
+              {!ssMode && (
+                <Tooltip sticky direction="top" opacity={1}>
+                  <div style={{ fontSize: 12 }}>
+                    <div style={{ fontWeight: 700 }}>{n.kategori}</div>
+                    <div style={{ color: "#666", marginTop: 4 }}>{fmtCoord(n.latitude, n.longitude)}</div>
+                    <div style={{ marginTop: 4 }}>{n.items[0]?.keypoint || "-"}</div>
+                  </div>
+                </Tooltip>
+              )}
+            </Marker>
+          ))}
 
         {!!selectedUlp &&
           (shouldAggregatePoles
             ? poleAggregateCells.map((cell) => {
-                const color = cell.hasSelectedRoutePole
-                  ? COLOR_TIANG_SELECTED
-                  : cell.hasSectionPole
+              const color = cell.hasSelectedRoutePole
+                ? COLOR_TIANG_SELECTED
+                : cell.hasSectionPole
                   ? COLOR_TIANG_SECTION
                   : COLOR_TIANG_BASE;
 
-                const radius = Math.min(8.5, 2.8 + Math.log2(cell.count + 1));
+              const radius = Math.min(10.5, 3 + Math.log2(cell.count + 1));
 
-                return (
-                  <CircleMarker
-                    key={`pole-agg-${cell.key}`}
-                    center={[cell.latitude, cell.longitude]}
-                    radius={radius}
-                    pathOptions={{
-                      color: color.stroke,
-                      weight: cell.hasSelectedRoutePole ? 2 : cell.hasSectionPole ? 1.4 : 1,
-                      fillColor: color.fill,
-                      fillOpacity: cell.hasSelectedRoutePole ? 0.96 : cell.hasSectionPole ? 0.86 : 0.62,
-                    }}
-                    eventHandlers={{
-                      click: () => focusTo(cell.latitude, cell.longitude),
-                    }}
-                  >
-                    {!ssMode && (
-                      <Tooltip sticky direction="top" opacity={1}>
-                        <div style={{ fontSize: 12 }}>
-                          <div style={{ fontWeight: 700 }}>Cluster Tiang</div>
-                          <div style={{ color: "#666", marginTop: 4 }}>
-                            Jumlah tiang: <b>{cell.count}</b>
-                          </div>
-                          <div style={{ color: "#666" }}>
-                            ULP: {cell.ulps.slice(0, 3).join(", ") || "-"}
-                            {cell.ulps.length > 3 ? " ..." : ""}
-                          </div>
-                          <div style={{ marginTop: 4, color: "#ef6c00" }}>Klik untuk zoom in</div>
+              return (
+                <CircleMarker
+                  key={`pole-agg-${cell.key}`}
+                  center={[cell.latitude, cell.longitude]}
+                  radius={radius}
+                  pathOptions={{
+                    color: color.stroke,
+                    weight: cell.hasSelectedRoutePole ? 2.1 : cell.hasSectionPole ? 1.5 : 1.05,
+                    fillColor: color.fill,
+                    fillOpacity: cell.hasSelectedRoutePole ? 0.96 : cell.hasSectionPole ? 0.86 : 0.62,
+                  }}
+                  eventHandlers={{
+                    click: () => focusTo(cell.latitude, cell.longitude),
+                  }}
+                >
+                  {!ssMode && (
+                    <Tooltip sticky direction="top" opacity={1}>
+                      <div style={{ fontSize: 12 }}>
+                        <div style={{ fontWeight: 700 }}>Cluster Tiang</div>
+                        <div style={{ color: "#666", marginTop: 4 }}>
+                          Jumlah tiang: <b>{cell.count}</b>
                         </div>
-                      </Tooltip>
-                    )}
-                  </CircleMarker>
-                );
-              })
+                        <div style={{ color: "#666" }}>
+                          ULP: {cell.ulps.slice(0, 3).join(", ") || "-"}
+                          {cell.ulps.length > 3 ? " ..." : ""}
+                        </div>
+                        <div style={{ marginTop: 4, color: "#ef6c00" }}>Klik untuk zoom in</div>
+                      </div>
+                    </Tooltip>
+                  )}
+                </CircleMarker>
+              );
+            })
             : poleGroupsDisplayed.map((g) => {
-                const isSelectedRoutePole = activePoleRouteKeySet.has(g.key);
-                const isSectionPole = sectionPoleKeySet.has(g.key);
-                const selectedOrder = activePoleRouteIndexMap.get(g.key);
+              const isSelectedRoutePole = activePoleRouteKeySet.has(g.key);
+              const isSectionPole = sectionPoleKeySet.has(g.key);
+              const selectedOrder = activePoleRouteIndexMap.get(g.key);
 
-                const color = isSelectedRoutePole
-                  ? COLOR_TIANG_SELECTED
-                  : isSectionPole
+              const color = isSelectedRoutePole
+                ? COLOR_TIANG_SELECTED
+                : isSectionPole
                   ? COLOR_TIANG_SECTION
                   : COLOR_TIANG_BASE;
 
-                const radius = isSelectedRoutePole
-                  ? poleCanvasRadius + 1.1
-                  : isSectionPole
-                  ? poleCanvasRadius + 0.35
+              const radius = isSelectedRoutePole
+                ? poleCanvasRadius + 1.5
+                : isSectionPole
+                  ? poleCanvasRadius + 0.7
                   : poleCanvasRadius;
 
-                return (
-                  <CircleMarker
-                    key={`pole-${g.key}`}
-                    center={[g.latitude, g.longitude]}
-                    radius={radius}
-                    pathOptions={{
-                      color: color.stroke,
-                      weight: isSelectedRoutePole ? 1.8 : isSectionPole ? 1.25 : 0.85,
-                      fillColor: color.fill,
-                      fillOpacity: isSelectedRoutePole ? 0.96 : isSectionPole ? 0.84 : 0.6,
-                    }}
-                    eventHandlers={{ click: () => handlePoleClick(g) }}
-                  >
-                    {!ssMode && (
-                      <Tooltip sticky direction="top" opacity={1}>
-                        <div style={{ fontSize: 12 }}>
-                          <div style={{ fontWeight: 700 }}>
-                            TIANG {selectedOrder ? `#${selectedOrder}` : ""}
-                          </div>
-                          <div style={{ color: "#666", marginTop: 4 }}>{fmtCoord(g.latitude, g.longitude)}</div>
-                          <div style={{ marginTop: 4 }}>
-                            ULP: <b>{g.ulp || "-"}</b>
-                          </div>
-                          <div style={{ color: "#666" }}>
-                            Masuk section aktif: <b>{isSectionPole ? "YA" : "TIDAK"}</b>
-                          </div>
+              return (
+                <CircleMarker
+                  key={`pole-${g.key}`}
+                  center={[g.latitude, g.longitude]}
+                  radius={radius}
+                  pathOptions={{
+                    color: color.stroke,
+                    weight: isSelectedRoutePole ? 2.2 : isSectionPole ? 1.6 : 1.05,
+                    fillColor: color.fill,
+                    fillOpacity: isSelectedRoutePole ? 0.96 : isSectionPole ? 0.84 : 0.66,
+                  }}
+                  eventHandlers={{ click: () => handlePoleClick(g) }}
+                >
+                  {!ssMode && (
+                    <Tooltip sticky direction="top" opacity={1}>
+                      <div style={{ fontSize: 12 }}>
+                        <div style={{ fontWeight: 700 }}>
+                          TIANG {selectedOrder ? `#${selectedOrder}` : ""}
                         </div>
-                      </Tooltip>
-                    )}
-                  </CircleMarker>
-                );
-              }))}
+                        <div style={{ color: "#666", marginTop: 4 }}>{fmtCoord(g.latitude, g.longitude)}</div>
+                        <div style={{ marginTop: 4 }}>
+                          ULP: <b>{g.ulp || "-"}</b>
+                        </div>
+                        <div style={{ color: "#666" }}>
+                          Masuk jalur aktif: <b>{isSelectedRoutePole ? "YA" : "TIDAK"}</b>
+                        </div>
+                        <div style={{ color: "#666" }}>
+                          Jalur aktif: <b>{activeRouteLabel}</b>
+                        </div>
+                        <div style={{ color: "#666" }}>
+                          Masuk section highlight: <b>{isSectionPole ? "YA" : "TIDAK"}</b>
+                        </div>
+                      </div>
+                    </Tooltip>
+                  )}
+                </CircleMarker>
+              );
+            }))}
       </MapContainer>
     </div>
   );
