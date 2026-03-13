@@ -1,32 +1,34 @@
 'use client';
+
 import { createContext, useState, useEffect, useContext } from "react";
 import axios from "../utils/axios";
 import { useRouter } from "next/navigation";
 
-// Inisialisasi context
 export const AuthContext = createContext();
 
-// Provider
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const router = useRouter();
 
   useEffect(() => {
     const fetchUser = async () => {
-      const token = localStorage.getItem("auth_token");
-      if (!token) return;
-
       try {
+        const token = localStorage.getItem("auth_token");
+        if (!token) return;
+
         const res = await axios.get("/user", {
-          headers: { Authorization: `Bearer ${token}` }, // Perbaikan spasi pada Bearer
+          headers: {
+            Authorization: `Bearer ${token}`
+          }
         });
+
         setUser(res.data);
+
       } catch (error) {
-        console.error("Gagal mengambil data pengguna:", error);
+        console.error("Gagal mengambil user:", error);
+
         localStorage.removeItem("auth_token");
         setUser(null);
-        // Opsional: Redirect ke login jika token tidak valid
-        // router.push("/login"); 
       }
     };
 
@@ -34,62 +36,61 @@ export const AuthProvider = ({ children }) => {
   }, []);
 
   const login = async (form) => {
-  if (!form.username || !form.password) {
-    throw new Error("Username dan password harus diisi.");
-  }
-
-  try {
-    const res = await axios.post("/login", form);
-
-    localStorage.setItem("auth_token", res.data.access_token);
-    setUser(res.data.user);
-
-    const role = res.data.user.role;
-
-    if (role === "supervisor") {
-      router.push("/menu");
-    } 
-    else if (role === "admin_up3") {
-      router.push("/menu");
-    } 
-    else if (role === "admin_ulp") {
-      router.push("/menu");
-    } 
-    else if (role === "vendor") {
-      router.push("/menu");
-    } 
-    else {
-      router.push("/daftaradmin");
+    if (!form.username || !form.password) {
+      throw new Error("Username dan password harus diisi.");
     }
 
-  } catch (e) {
-    console.error("Login gagal:", e.response?.data?.message || e.message);
-    throw new Error("Login gagal, periksa kembali username dan password.");
-  }
-};
+    try {
+      const res = await axios.post("/login", form);
+
+      const token = res.data.access_token;
+
+      localStorage.setItem("auth_token", token);
+      setUser(res.data.user);
+
+      const role = res.data.user.role;
+
+      if (
+        role === "supervisor" ||
+        role === "admin_up3" ||
+        role === "admin_ulp" ||
+        role === "vendor"
+      ) {
+        router.push("/menu");
+      } else {
+        router.push("/daftaradmin");
+      }
+
+    } catch (error) {
+      console.error("Login gagal:", error);
+      throw new Error("Login gagal, cek username dan password.");
+    }
+  };
 
   const logout = async () => {
     try {
       const token = localStorage.getItem("auth_token");
-      if (token) {
-        await axios.post("/logout", null, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-      }
-    } catch (e) {
-      console.error("Logout gagal:", e);
-    } finally {
-      // --- PERUBAHAN UTAMA DI SINI ---
-      localStorage.removeItem("auth_token");
-      setUser(null);
 
-      // Mengarahkan ke halaman login utama (page.tsx)
-      // Jika file login Anda ada di: app/login/page.tsx -> gunakan "/login"
-      // Jika file login Anda ada di: app/page.tsx (root) -> gunakan "/"
-      
-      router.push("/"); 
-      router.refresh(); // Membersihkan cache client-side agar state benar-benar segar
+      if (token) {
+        await axios.post(
+          "/logout",
+          {},
+          {
+            headers: {
+              Authorization: `Bearer ${token}`
+            }
+          }
+        );
+      }
+    } catch (error) {
+      console.error("Logout error:", error);
     }
+
+    localStorage.removeItem("auth_token");
+    setUser(null);
+
+    router.push("/");
+    router.refresh();
   };
 
   return (
@@ -99,11 +100,6 @@ export const AuthProvider = ({ children }) => {
   );
 };
 
-// Hook custom
 export const useAuth = () => {
-  const context = useContext(AuthContext);
-  if (context === undefined) {
-    throw new Error("useAuth harus digunakan dalam AuthProvider");
-  }
-  return context;
+  return useContext(AuthContext);
 };
