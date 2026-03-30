@@ -28,6 +28,8 @@ type AsetGdRow = {
   fasa: string;
 };
 
+type KonstruksiType = 'PORTAL' | 'CANTOL';
+
 type FormState = {
   up3: string;
   ulp: string;
@@ -36,16 +38,20 @@ type FormState = {
   namaGardu: string;
   longlat: string;
   kapasitas: string;
-  fasa: string;
-  zona: string;
-  section: string;
-  penyulang: string;
+
+  konstruksi: KonstruksiType;
+  fuselinkMax: string;
+  bebanTrMax: string;
 
   alasan: string[];
   pemeliharaan: string[];
 
   dieksekusiOleh: string;
   jumlahItemMaterial: string;
+
+  nilaiTahananIsolasiSesudah: string;
+  nilaiPentanahanSetelahPerbaikan: string;
+  keterangan: string;
 };
 
 type ImagePayload = { filename: string; mimeType: string; base64: string };
@@ -59,22 +65,6 @@ type ToastState = {
 
 /* ================= OPTIONS ================= */
 
-const APA_YANG_DILAKUKAN_OPTIONS = [
-  'Pemasangan/Pembongkaran kubikel air insulated motorized, Incoming CB 20 kV',
-  'Pemasangan/Pembongkaran kubikel air insulated motorized, Outgoing (CB) 20 kV',
-  'Pemasangan/Pembongkaran terminasi / end MOF Indoor three core',
-  'Pemasangan/Pembongkaran elastimol 20 kV',
-  'Membersihkan peralatan kubikel & catu daya (Offline)',
-  'Penggantian kabel dan accessories',
-  'Pemasangan dan setting relay',
-  'Pemasangan dudukan kubikel',
-  'Perbaikan pentanahan',
-  'Perbaikan pintu gardu',
-  'Pembersihan halaman gardu',
-  'Pengecatan gardu MC',
-  'Aktivasi relay dan heater kubikel',
-];
-
 const MENGAPA_GARDU_DIPELIHARA_OPTIONS = [
   'ADANYA FLASHOVER/KORONA/SUARA MENDESIS',
   'PERUBAHAN DARI OPEN CELL KE KUBIKEL',
@@ -83,6 +73,20 @@ const MENGAPA_GARDU_DIPELIHARA_OPTIONS = [
   'KONDISI RUANGAN SANGAT LEMBAB',
   'PANEL PHBTR KOTOR',
   'PIPA KABEL TIDAK ADA/RUSAK',
+];
+
+const APA_YANG_DILAKUKAN_OPTIONS = [
+  'PENGGANTIAN FUSELINK',
+  'PENGENCANGAN KONEKSI',
+  'PEMBERSIHAN BUSHING / TERMINAL',
+  'PEMBERSIHAN PANEL / KUBIKEL',
+  'PERBAIKAN PENTANAHAN',
+  'PENGECATAN GARDU',
+  'PERBAIKAN PINTU GARDU',
+  'PENGGANTIAN AKSESORIS',
+  'PEMERIKSAAN DAN PENGUJIAN',
+  'PERBAIKAN KONSTRUKSI',
+  'PENGGANTIAN NAME PLATE',
 ];
 
 const DIEKSEKUSI_OLEH_OPTIONS = [
@@ -112,14 +116,19 @@ const uniquePretty = (arr: any[]) => {
   return Array.from(m.values()).sort();
 };
 
-const pickUnique = (vals: string[]) => {
-  const u = uniquePretty(vals);
-  return u.length === 1 ? u[0] : '';
-};
-
 const fmtCoord = (n: number) => {
   if (!Number.isFinite(n)) return '';
   return n.toFixed(6);
+};
+
+const toNumber = (v: string) => {
+  const n = Number(String(v || '0').replace(',', '.'));
+  return Number.isFinite(n) ? n : 0;
+};
+
+const formatStepValue = (n: number, decimals = 0) => {
+  const safe = Math.max(0, n);
+  return decimals > 0 ? safe.toFixed(decimals) : String(Math.round(safe));
 };
 
 const fileToBase64Payload = (file: File) =>
@@ -137,6 +146,11 @@ const fileToBase64Payload = (file: File) =>
     };
     reader.readAsDataURL(file);
   });
+
+const maybeFileToBase64Payload = async (file: File | null) => {
+  if (!file) return null;
+  return fileToBase64Payload(file);
+};
 
 /* ================= PAGE ================= */
 
@@ -209,16 +223,20 @@ export default function Page() {
     namaGardu: '',
     longlat: '',
     kapasitas: '0',
-    fasa: '',
-    zona: '',
-    section: '',
-    penyulang: '',
+
+    konstruksi: 'PORTAL',
+    fuselinkMax: '0.00',
+    bebanTrMax: '0.00',
 
     alasan: [],
     pemeliharaan: [],
 
     dieksekusiOleh: '',
     jumlahItemMaterial: '0',
+
+    nilaiTahananIsolasiSesudah: '0.00',
+    nilaiPentanahanSetelahPerbaikan: '0.00',
+    keterangan: '',
   });
 
   const handleChange = <K extends keyof FormState>(key: K, val: FormState[K]) => {
@@ -269,11 +287,9 @@ export default function Page() {
     return () => navigator.geolocation.clearWatch(id);
   }, [tracking]);
 
-  /* ========= BASE ROWS ========= */
+  /* ========= DROPDOWN / AUTOFILL ========= */
 
   const baseUp3Rows = useMemo(() => aset.filter(a => norm(a.up3) === norm(form.up3)), [aset, form.up3]);
-
-  /* ========= ALWAYS SHOW OPTIONS ========= */
 
   const ULP_LIST = useMemo(() => uniquePretty(baseUp3Rows.map(a => a.ulp)), [baseUp3Rows]);
 
@@ -281,30 +297,17 @@ export default function Page() {
     const all = uniquePretty(baseUp3Rows.map(a => a.namaGardu));
     if (!form.ulp) return all;
 
-    const filtered = uniquePretty(baseUp3Rows.filter(a => norm(a.ulp) === norm(form.ulp)).map(a => a.namaGardu));
-    return filtered.length ? filtered : all;
+    return uniquePretty(
+      baseUp3Rows.filter(a => norm(a.ulp) === norm(form.ulp)).map(a => a.namaGardu)
+    );
   }, [baseUp3Rows, form.ulp]);
-
-  const ALL_PENYULANG_LIST = useMemo(() => uniquePretty(baseUp3Rows.map(a => a.penyulang)), [baseUp3Rows]);
-  const PENYULANG_LIST = useMemo(() => ALL_PENYULANG_LIST, [ALL_PENYULANG_LIST]);
-
-  const ALL_ZONA_LIST = useMemo(() => uniquePretty(baseUp3Rows.map(a => a.zona)), [baseUp3Rows]);
-  const ZONA_LIST = useMemo(() => ALL_ZONA_LIST, [ALL_ZONA_LIST]);
-
-  const ALL_SECTION_LIST = useMemo(() => uniquePretty(baseUp3Rows.map(a => a.section)), [baseUp3Rows]);
-  const SECTION_LIST = useMemo(() => ALL_SECTION_LIST, [ALL_SECTION_LIST]);
-
-  /* ========= PAIRING AUTOFILL ========= */
 
   useEffect(() => {
     setForm(prev => ({
       ...prev,
       namaGardu: '',
       longlat: '',
-      fasa: '',
-      penyulang: '',
-      zona: '',
-      section: '',
+      kapasitas: '0',
     }));
     closeMap();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -313,98 +316,28 @@ export default function Page() {
   useEffect(() => {
     if (!form.namaGardu) return;
 
-    const rowsForGardu = baseUp3Rows.filter(a => {
+    const row = baseUp3Rows.find(a => {
       if (form.ulp && norm(a.ulp) !== norm(form.ulp)) return false;
       return norm(a.namaGardu) === norm(form.namaGardu);
     });
 
-    const row0 = rowsForGardu[0];
-    const uniqueP = pickUnique(rowsForGardu.map(r => r.penyulang));
-    const uniqueZ = pickUnique(rowsForGardu.map(r => r.zona));
-    const uniqueS = pickUnique(rowsForGardu.map(r => r.section));
-
-    setForm(prev => {
-      let nextP = prev.penyulang;
-      if (nextP && !ALL_PENYULANG_LIST.some(o => norm(o) === norm(nextP))) nextP = '';
-      if (!nextP && uniqueP) nextP = uniqueP;
-
-      return {
-        ...prev,
-        longlat: row0?.longlat || prev.longlat || '',
-        kapasitas: row0?.kapasitas || prev.kapasitas || '0',
-        fasa: row0?.fasa || '',
-        penyulang: nextP,
-        zona: uniqueZ || prev.zona || '',
-        section: uniqueS || prev.section || '',
-      };
-    });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [form.namaGardu, form.ulp, baseUp3Rows, ALL_PENYULANG_LIST]);
-
-  useEffect(() => {
-    if (!form.penyulang) return;
-
-    const rowsForP = baseUp3Rows.filter(a => {
-      if (form.ulp && norm(a.ulp) !== norm(form.ulp)) return false;
-      return norm(a.penyulang) === norm(form.penyulang);
-    });
-
-    const uniqueG = !form.namaGardu ? pickUnique(rowsForP.map(r => r.namaGardu)) : '';
-    const uniqueZ = pickUnique(rowsForP.map(r => r.zona));
-    const uniqueS = pickUnique(rowsForP.map(r => r.section));
+    if (!row) return;
 
     setForm(prev => ({
       ...prev,
-      zona: uniqueZ || '',
-      section: uniqueS || '',
+      longlat: row.longlat || prev.longlat || '',
+      kapasitas: row.kapasitas || prev.kapasitas || '0',
     }));
-
-    if (uniqueG) handleChange('namaGardu', uniqueG);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [form.penyulang]);
-
-  useEffect(() => {
-    if (!form.zona) return;
-
-    const rowsForZ = baseUp3Rows.filter(a => {
-      if (form.ulp && norm(a.ulp) !== norm(form.ulp)) return false;
-      if (form.namaGardu && norm(a.namaGardu) !== norm(form.namaGardu)) return false;
-      if (form.penyulang && norm(a.penyulang) !== norm(form.penyulang)) return false;
-      return norm(a.zona) === norm(form.zona);
-    });
-
-    const uniqueS = pickUnique(rowsForZ.map(r => r.section));
-    setForm(prev => ({ ...prev, section: uniqueS || prev.section }));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [form.zona]);
-
-  useEffect(() => {
-    if (form.penyulang && !ALL_PENYULANG_LIST.some(o => norm(o) === norm(form.penyulang))) {
-      setForm(prev => ({ ...prev, penyulang: '' }));
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ALL_PENYULANG_LIST]);
-
-  useEffect(() => {
-    if (form.zona && !ALL_ZONA_LIST.some(o => norm(o) === norm(form.zona))) {
-      setForm(prev => ({ ...prev, zona: '' }));
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ALL_ZONA_LIST]);
-
-  useEffect(() => {
-    if (form.section && !ALL_SECTION_LIST.some(o => norm(o) === norm(form.section))) {
-      setForm(prev => ({ ...prev, section: '' }));
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ALL_SECTION_LIST]);
+  }, [form.namaGardu, form.ulp, baseUp3Rows]);
 
   /* ================= FOTO ================= */
 
-  const [fotoSebelum, setFotoSebelum] = useState<File | null>(null);
-  const [fotoProses, setFotoProses] = useState<File | null>(null);
-  const [fotoSesudah, setFotoSesudah] = useState<File | null>(null);
-  const [fotoLampiranBA, setFotoLampiranBA] = useState<File | null>(null);
+  const [fotoSebelum1, setFotoSebelum1] = useState<File | null>(null);
+  const [fotoSebelum2, setFotoSebelum2] = useState<File | null>(null);
+  const [fotoProsesPekerjaan, setFotoProsesPekerjaan] = useState<File | null>(null);
+  const [fotoSesudah1, setFotoSesudah1] = useState<File | null>(null);
+  const [fotoSesudah2, setFotoSesudah2] = useState<File | null>(null);
+  const [fotoNamePlate, setFotoNamePlate] = useState<File | null>(null);
 
   /* ================= VALIDASI ================= */
 
@@ -419,18 +352,18 @@ export default function Page() {
     isNonEmpty(form.ulp) &&
     isNonEmpty(form.tanggalHar) &&
     isNonEmpty(form.namaGardu) &&
-    isNonEmpty(form.penyulang) &&
-    isNonEmpty(form.zona) &&
-    isNonEmpty(form.section) &&
     isNonEmpty(form.longlat) &&
-    isNonEmpty(form.pemeliharaan) &&
+    isNonEmpty(form.kapasitas) &&
+    isNonEmpty(form.konstruksi) &&
+    isNonEmpty(form.fuselinkMax) &&
+    isNonEmpty(form.bebanTrMax) &&
     isNonEmpty(form.alasan) &&
+    isNonEmpty(form.pemeliharaan) &&
     isNonEmpty(form.dieksekusiOleh) &&
     isNonEmpty(form.jumlahItemMaterial) &&
-    fotoSebelum &&
-    fotoProses &&
-    fotoSesudah &&
-    fotoLampiranBA;
+    fotoSebelum1 &&
+    fotoProsesPekerjaan &&
+    fotoSesudah1;
 
   /* ================= SUBMIT ================= */
 
@@ -449,6 +382,39 @@ export default function Page() {
     return form.pemeliharaan.map(v => `- ${v}`).join('\n');
   }, [form.pemeliharaan]);
 
+  const resetForm = () => {
+    setForm(prev => ({
+      ...prev,
+      ulp: '',
+      tanggalHar: '',
+      namaGardu: '',
+      longlat: '',
+      kapasitas: '0',
+
+      konstruksi: 'PORTAL',
+      fuselinkMax: '0.00',
+      bebanTrMax: '0.00',
+
+      alasan: [],
+      pemeliharaan: [],
+
+      dieksekusiOleh: '',
+      jumlahItemMaterial: '0',
+
+      nilaiTahananIsolasiSesudah: '0.00',
+      nilaiPentanahanSetelahPerbaikan: '0.00',
+      keterangan: '',
+    }));
+
+    setFotoSebelum1(null);
+    setFotoSebelum2(null);
+    setFotoProsesPekerjaan(null);
+    setFotoSesudah1(null);
+    setFotoSesudah2(null);
+    setFotoNamePlate(null);
+    closeMap();
+  };
+
   const handleSubmit = async () => {
     if (!isFormValid || submitting) return;
 
@@ -456,11 +422,20 @@ export default function Page() {
       setSubmitting(true);
       showToast({ variant: 'info', title: 'Mengirim...', message: 'Sedang upload foto & simpan data' });
 
-      const [sebelum, proses, sesudah, ba] = await Promise.all([
-        fileToBase64Payload(fotoSebelum!),
-        fileToBase64Payload(fotoProses!),
-        fileToBase64Payload(fotoSesudah!),
-        fileToBase64Payload(fotoLampiranBA!),
+      const [
+        sebelum1,
+        sebelum2,
+        proses,
+        sesudah1,
+        sesudah2,
+        namePlate,
+      ] = await Promise.all([
+        maybeFileToBase64Payload(fotoSebelum1),
+        maybeFileToBase64Payload(fotoSebelum2),
+        maybeFileToBase64Payload(fotoProsesPekerjaan),
+        maybeFileToBase64Payload(fotoSesudah1),
+        maybeFileToBase64Payload(fotoSesudah2),
+        maybeFileToBase64Payload(fotoNamePlate),
       ]);
 
       const payload = {
@@ -471,10 +446,12 @@ export default function Page() {
           pemeliharaanText,
         },
         images: {
-          fotoSebelum: sebelum,
-          fotoProses: proses,
-          fotoSesudah: sesudah,
-          fotoLampiranBA: ba,
+          fotoSebelum1: sebelum1,
+          fotoSebelum2: sebelum2,
+          fotoProsesPekerjaan: proses,
+          fotoSesudah1: sesudah1,
+          fotoSesudah2: sesudah2,
+          fotoNamePlate: namePlate,
         },
       };
 
@@ -497,28 +474,7 @@ export default function Page() {
         showToast({ variant: 'success', title: 'Berhasil ✅', message: 'Data sudah masuk ke PEMELIHARAAN GT' });
       }
 
-      setForm(prev => ({
-        ...prev,
-        ulp: '',
-        tanggalHar: '',
-        namaGardu: '',
-        longlat: '',
-        kapasitas: '0',
-        fasa: '',
-        zona: '',
-        section: '',
-        penyulang: '',
-        alasan: [],
-        pemeliharaan: [],
-        dieksekusiOleh: '',
-        jumlahItemMaterial: '0',
-      }));
-
-      setFotoSebelum(null);
-      setFotoProses(null);
-      setFotoSesudah(null);
-      setFotoLampiranBA(null);
-      closeMap();
+      resetForm();
     } catch (e: any) {
       showToast({ variant: 'error', title: 'Gagal ❌', message: e?.message || 'Submit gagal' });
     } finally {
@@ -527,27 +483,7 @@ export default function Page() {
   };
 
   const handleCancel = () => {
-    setForm(prev => ({
-      ...prev,
-      ulp: '',
-      tanggalHar: '',
-      namaGardu: '',
-      longlat: '',
-      kapasitas: '0',
-      fasa: '',
-      zona: '',
-      section: '',
-      penyulang: '',
-      alasan: [],
-      pemeliharaan: [],
-      dieksekusiOleh: '',
-      jumlahItemMaterial: '0',
-    }));
-    setFotoSebelum(null);
-    setFotoProses(null);
-    setFotoSesudah(null);
-    setFotoLampiranBA(null);
-    closeMap();
+    resetForm();
     showToast({ variant: 'info', title: 'Dibatalkan', message: 'Form direset' });
   };
 
@@ -608,8 +544,6 @@ export default function Page() {
             <div className="w-full grid grid-cols-1 md:grid-cols-2 gap-x-10 gap-y-6">
               <Input label="UP3" value={form.up3} readOnly />
 
-              <Input label="Tanggal HAR Gardu" type="date" value={form.tanggalHar} onChange={e => handleChange('tanggalHar', e.target.value)} />
-
               <PopupSelect
                 label="ULP"
                 value={form.ulp}
@@ -621,13 +555,11 @@ export default function Page() {
                 disabled={asetLoading}
               />
 
-              <PopupSelect
-                label="Dieksekusi oleh?"
-                value={form.dieksekusiOleh}
-                options={DIEKSEKUSI_OLEH_OPTIONS}
-                searchable
-                onSave={v => handleChange('dieksekusiOleh', v)}
-                onClear={() => handleChange('dieksekusiOleh', '')}
+              <Input
+                label="Tanggal HAR Gardu"
+                type="date"
+                value={form.tanggalHar}
+                onChange={e => handleChange('tanggalHar', e.target.value)}
               />
 
               <PopupSelect
@@ -640,61 +572,6 @@ export default function Page() {
                 onClear={() => handleChange('namaGardu', '')}
               />
 
-              <PopupMultiSelect
-                label="Mengapa Gardu dipelihara?"
-                value={form.alasan}
-                options={MENGAPA_GARDU_DIPELIHARA_OPTIONS}
-                onSave={v => handleChange('alasan', v)}
-                onClear={() => handleChange('alasan', [])}
-                displayMode="commaNumbered"
-                searchable
-              />
-
-              <PopupSelect
-                label="Penyulang"
-                value={form.penyulang}
-                options={PENYULANG_LIST}
-                disabled={!form.ulp}
-                searchable
-                onSave={v => handleChange('penyulang', v)}
-                onClear={() => handleChange('penyulang', '')}
-              />
-
-              <PopupMultiSelect
-                label="Apa yang dilakukan?"
-                value={form.pemeliharaan}
-                options={APA_YANG_DILAKUKAN_OPTIONS}
-                onSave={v => handleChange('pemeliharaan', v)}
-                onClear={() => handleChange('pemeliharaan', [])}
-                displayMode="bullets"
-                searchable
-              />
-
-              <PopupSelect
-                label="Zona Proteksi"
-                value={form.zona}
-                options={ZONA_LIST}
-                disabled={!form.ulp}
-                searchable
-                onSave={v => handleChange('zona', v)}
-                onClear={() => handleChange('zona', '')}
-              />
-
-              <NumberStepper label="Jumlah item material" value={form.jumlahItemMaterial} onChange={v => handleChange('jumlahItemMaterial', v)} />
-
-              <PopupSelect
-                label="Section"
-                value={form.section}
-                options={SECTION_LIST}
-                searchable
-                disabled={!form.ulp}
-                onSave={v => handleChange('section', v)}
-                onClear={() => handleChange('section', '')}
-              />
-
-              <NumberStepper label="Kapasitas" value={form.kapasitas} onChange={v => handleChange('kapasitas', v)} />
-
-              {/* LONG/LAT editable + icon */}
               <div className="md:col-span-2">
                 <label className="text-sm font-semibold">
                   LONG / LAT <span className="text-red-500">*</span>
@@ -750,14 +627,103 @@ export default function Page() {
                   )}
                 </div>
               </div>
-            </div>
 
-            {/* FOTO */}
-            <div className="mt-10 grid grid-cols-1 md:grid-cols-4 gap-8">
-              <UploadPreview label="Foto Sebelum" file={fotoSebelum} setFile={setFotoSebelum} />
-              <UploadPreview label="Foto Proses" file={fotoProses} setFile={setFotoProses} />
-              <UploadPreview label="Foto Sesudah" file={fotoSesudah} setFile={setFotoSesudah} />
-              <UploadPreview label="Lampiran BA Penggantian" file={fotoLampiranBA} setFile={setFotoLampiranBA} />
+              <NumberStepper
+                label="Kapasitas"
+                value={form.kapasitas}
+                onChange={v => handleChange('kapasitas', v)}
+              />
+
+              <KonstruksiToggle
+                value={form.konstruksi}
+                onChange={v => handleChange('konstruksi', v)}
+              />
+
+              <NumberStepper
+                label="Fuselink Max"
+                value={form.fuselinkMax}
+                onChange={v => handleChange('fuselinkMax', v)}
+                step={0.01}
+                decimals={2}
+              />
+
+              <NumberStepper
+                label="Beban TR Max"
+                value={form.bebanTrMax}
+                onChange={v => handleChange('bebanTrMax', v)}
+                step={0.01}
+                decimals={2}
+              />
+
+              <PopupMultiSelect
+                label="Mengapa Gardu dipelihara ?"
+                value={form.alasan}
+                options={MENGAPA_GARDU_DIPELIHARA_OPTIONS}
+                onSave={v => handleChange('alasan', v)}
+                onClear={() => handleChange('alasan', [])}
+                displayMode="commaNumbered"
+                searchable
+              />
+
+              <PopupMultiSelect
+                label="Apa yang dilakukan ?"
+                value={form.pemeliharaan}
+                options={APA_YANG_DILAKUKAN_OPTIONS}
+                onSave={v => handleChange('pemeliharaan', v)}
+                onClear={() => handleChange('pemeliharaan', [])}
+                displayMode="bullets"
+                searchable
+              />
+
+              <PopupSelect
+                label="Dieksekusi oleh"
+                value={form.dieksekusiOleh}
+                options={DIEKSEKUSI_OLEH_OPTIONS}
+                searchable
+                onSave={v => handleChange('dieksekusiOleh', v)}
+                onClear={() => handleChange('dieksekusiOleh', '')}
+              />
+
+              <NumberStepper
+                label="Jumlah item material"
+                value={form.jumlahItemMaterial}
+                onChange={v => handleChange('jumlahItemMaterial', v)}
+              />
+
+              <UploadPreview label="Foto Sebelum (1)" file={fotoSebelum1} setFile={setFotoSebelum1} required />
+              <UploadPreview label="Foto Sebelum (2)" file={fotoSebelum2} setFile={setFotoSebelum2} />
+
+              <UploadPreview label="Foto Proses Pekerjaan" file={fotoProsesPekerjaan} setFile={setFotoProsesPekerjaan} required />
+              <UploadPreview label="Foto Sesudah (1)" file={fotoSesudah1} setFile={setFotoSesudah1} required />
+
+              <UploadPreview label="Foto Sesudah (2)" file={fotoSesudah2} setFile={setFotoSesudah2} />
+              <UploadPreview label="Foto Name Plate" file={fotoNamePlate} setFile={setFotoNamePlate} />
+
+              <NumberStepper
+                label="Nilai Tahanan Isolasi Sesudah"
+                value={form.nilaiTahananIsolasiSesudah}
+                onChange={v => handleChange('nilaiTahananIsolasiSesudah', v)}
+                step={0.01}
+                decimals={2}
+                required={false}
+              />
+
+              <NumberStepper
+                label="Nilai Pentanahan Setelah Perbaikan"
+                value={form.nilaiPentanahanSetelahPerbaikan}
+                onChange={v => handleChange('nilaiPentanahanSetelahPerbaikan', v)}
+                step={0.01}
+                decimals={2}
+                required={false}
+              />
+
+              <div className="md:col-span-2">
+                <TextArea
+                  label="Keterangan"
+                  value={form.keterangan}
+                  onChange={e => handleChange('keterangan', e.target.value)}
+                />
+              </div>
             </div>
 
             {/* ACTION */}
@@ -779,12 +745,14 @@ export default function Page() {
                   isFormValid && !submitting ? 'bg-[#2FA6DE]' : 'bg-gray-400 cursor-not-allowed'
                 }`}
               >
-                {submitting ? 'Submitting...' : 'Submit'}
+                {submitting ? 'Submitting...' : 'Save'}
               </button>
             </div>
 
             {!isFormValid && (
-              <div className="mt-6 text-xs text-gray-500 text-center">Lengkapi semua field & upload 4 foto untuk bisa Submit.</div>
+              <div className="mt-6 text-xs text-gray-500 text-center">
+                Lengkapi semua field wajib & upload foto wajib untuk bisa Save.
+              </div>
             )}
           </div>
         </div>
@@ -840,20 +808,31 @@ type NumberStepperProps = {
   label: string;
   value: string;
   onChange: (value: string) => void;
+  required?: boolean;
+  step?: number;
+  decimals?: number;
 };
 
-function NumberStepper({ label, value, onChange }: NumberStepperProps) {
-  const num = Number(value || 0);
+function NumberStepper({
+  label,
+  value,
+  onChange,
+  required = true,
+  step = 1,
+  decimals = 0,
+}: NumberStepperProps) {
+  const num = toNumber(value);
 
   return (
     <div>
       <label className="text-sm font-semibold">
-        {label} <span className="text-red-500">*</span>
+        {label} {required && <span className="text-red-500">*</span>}
       </label>
 
       <div className="flex items-center gap-3 mt-2">
         <input
           type="number"
+          step={decimals > 0 ? step : 1}
           value={value}
           onChange={e => onChange(e.target.value)}
           autoComplete="off"
@@ -862,7 +841,7 @@ function NumberStepper({ label, value, onChange }: NumberStepperProps) {
 
         <button
           type="button"
-          onClick={() => onChange(String(Math.max(0, num - 1)))}
+          onClick={() => onChange(formatStepValue(num - step, decimals))}
           className="w-12 h-12 border rounded-full text-xl bg-white hover:bg-gray-50 active:scale-[0.98]"
         >
           −
@@ -870,7 +849,7 @@ function NumberStepper({ label, value, onChange }: NumberStepperProps) {
 
         <button
           type="button"
-          onClick={() => onChange(String(num + 1))}
+          onClick={() => onChange(formatStepValue(num + step, decimals))}
           className="w-12 h-12 border rounded-full text-xl bg-white hover:bg-gray-50 active:scale-[0.98]"
         >
           +
@@ -880,13 +859,51 @@ function NumberStepper({ label, value, onChange }: NumberStepperProps) {
   );
 }
 
+function KonstruksiToggle({
+  value,
+  onChange,
+}: {
+  value: KonstruksiType;
+  onChange: (value: KonstruksiType) => void;
+}) {
+  return (
+    <div>
+      <label className="text-sm font-semibold">
+        Konstruksi <span className="text-red-500">*</span>
+      </label>
+
+      <div className="grid grid-cols-2 gap-3 mt-2">
+        {(['PORTAL', 'CANTOL'] as KonstruksiType[]).map(item => {
+          const active = value === item;
+
+          return (
+            <button
+              key={item}
+              type="button"
+              onClick={() => onChange(item)}
+              className={`py-3 px-5 rounded-full border-2 font-medium transition ${
+                active
+                  ? 'bg-[#2FA6DE] border-[#2FA6DE] text-white'
+                  : 'bg-white border-[#2FA6DE] text-[#2FA6DE] hover:bg-[#2FA6DE]/5'
+              }`}
+            >
+              {item}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 type UploadPreviewProps = {
   label: string;
   file: File | null;
   setFile: (file: File | null) => void;
+  required?: boolean;
 };
 
-function UploadPreview({ label, file, setFile }: UploadPreviewProps) {
+function UploadPreview({ label, file, setFile, required = false }: UploadPreviewProps) {
   const [open, setOpen] = useState(false);
   const preview = file ? URL.createObjectURL(file) : null;
 
@@ -900,7 +917,7 @@ function UploadPreview({ label, file, setFile }: UploadPreviewProps) {
     <>
       <div>
         <label className="text-sm font-semibold">
-          {label} <span className="text-red-500">*</span>
+          {label} {required && <span className="text-red-500">*</span>}
         </label>
 
         <div className="relative mt-2 h-[220px] border-2 border-dashed border-[#2FA6DE] rounded-2xl flex items-center justify-center">
@@ -1228,6 +1245,31 @@ function Input({ label, value, type = 'text', onChange, readOnly = false }: Inpu
           focus:outline-none focus:ring-2 focus:ring-[#2FA6DE]/30
           ${readOnly ? 'bg-gray-100' : 'bg-white'}
           ${isDateEmpty ? 'text-gray-400' : 'text-black'}`}
+      />
+    </div>
+  );
+}
+
+function TextArea({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  onChange: (e: ChangeEvent<HTMLTextAreaElement>) => void;
+}) {
+  return (
+    <div>
+      <label className="text-sm font-semibold">{label}</label>
+
+      <textarea
+        value={value}
+        onChange={onChange}
+        rows={4}
+        className="mt-2 w-full py-3 px-5 border-2 border-[#2FA6DE] rounded-3xl bg-white
+          focus:outline-none focus:ring-2 focus:ring-[#2FA6DE]/30 resize-none"
+        placeholder="Tambahkan keterangan..."
       />
     </div>
   );
